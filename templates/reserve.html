@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+
+{% block content %}
+    <div class="row">
+        <h2>Reserve the next available Spot on a device.</h2>
+    </div>
+    <div class="row">
+        <form class="form-horizontal" action="{% url "reserve" %}" method="POST">
+            {% csrf_token %}
+            <div class="form-group">
+                <label for="selectDevice" class="col-sm-2 control-label">Device</label>
+                <div class="col-sm-10">
+                    <select class="form-control" id="selectDevice" name="device">
+                        {% for name, option in form.fields.device.choices %}
+                            <option value="{{ name }}">{{ option }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="selectGPU" class="col-sm-2 control-label">GPU</label>
+                <div class="col-sm-10">
+                    <select class="form-control" id="selectGPU" name="gpu" disabled>
+                    </select>
+                </div>
+            </div>
+            <div class="form-group">
+                <div class="col-sm-offset-2 col-sm-10">
+                    <button type="submit" class="btn btn-primary" id="reserve-button" disabled>Reserve</button>
+                </div>
+            </div>
+        </form>
+    </div>
+{% endblock %}
+
+{% block scripts %}
+    {{ block.super }}
+    <script type="text/javascript">
+
+        function get_gpus(deviceSelect, gpuSelect) {
+            var selectedDevice = deviceSelect.find(":selected").val();
+            $.get("{% url "gpus_for_device"%}?device_name=" + selectedDevice, {}, function(data, textStatus, jqXHR) {
+                gpuSelect.children().remove();
+                var gpus = JSON.parse(data)["gpus"];
+                $.each(gpus, function(index, element) {
+                    var option = $('<option>' , {
+                        value: element.id,
+                        text: element.name
+                    });
+                    gpuSelect.append(option);
+                });
+                gpuSelect.prop("disabled", false);
+                $('#reserve-button').prop("disabled", false);
+            });
+        }
+
+        var deviceSelect = $('#selectDevice');
+        var gpuSelect = $('#selectGPU');
+        get_gpus(deviceSelect, gpuSelect);
+
+        deviceSelect.change(function() {
+            get_gpus(deviceSelect, gpuSelect);
+        })
+
+    </script>
+{% endblock %}
