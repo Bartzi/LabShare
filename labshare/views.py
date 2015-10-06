@@ -21,7 +21,7 @@ def index(request):
 def reserve(request):
     form = DeviceSelectForm(request.POST or None)
     if form.is_valid():
-        gpu = GPU.objects.get(pk=form.data["gpu"])
+        gpu = GPU.objects.get(uuid=form.data["gpu"])
         reservation = Reservation(gpu=gpu, user=request.user)
         reservation.save()
         return HttpResponseRedirect(reverse("index"))
@@ -40,7 +40,7 @@ def gpus(request):
     device = Device.objects.get(name=device_name)
     return_data = {
         'gpus': [{
-            "id": gpu.id,
+            "id": gpu.uuid,
             "name": gpu.model_name} for gpu in device.gpus.all()]
     }
     return HttpResponse(json.dumps(return_data, indent=4))

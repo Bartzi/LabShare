@@ -4,6 +4,7 @@ from django.db import models
 
 class Device(models.Model):
     name = models.CharField(max_length=255)
+    uuid = models.CharField(max_length=255)
     ip_address = models.GenericIPAddressField()
 
     def __str__(self):
