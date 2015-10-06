@@ -16,11 +16,12 @@ class Command(BaseCommand):
                 response = urllib.request.urlopen("http://{}:8080".format(ip_address), timeout=10).read().decode('utf-8')
                 gpus = json.loads(response)
                 for gpu_data in gpus:
-                    gpu = GPU.objects.filter(device=device, model_name=gpu_data["name"])
+                    gpu = GPU.objects.filter(device=device, uuid=gpu_data["uuid"])
                     if not gpu.exists():
                         gpu = GPU(
                             device=device,
                             model_name=gpu_data["name"],
+                            uuid=gpu_data["uuid"],
                             free_memory=gpu_data["memory"]["free"],
                             used_memory=gpu_data["memory"]["used"],
                             total_memory=gpu_data["memory"]["total"],

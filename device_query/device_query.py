@@ -12,6 +12,7 @@ class DeviceQueryHandler(BaseHTTPRequestHandler):
         for gpu in root.iter('gpu'):
             current_gpu_data = {
                 "name": gpu.find("product_name").text
+                "uuid": gpu.find("uuid").text
             }
 
             memory_usage = gpu.find("fb_memory_usage")
