@@ -13,7 +13,7 @@ class Command(BaseCommand):
         for device in Device.objects.all():
             try:
                 ip_address = device.ip_address
-                response = urllib.request.urlopen("http://{}:8080".format(ip_address), timeout=10).read().decode('utf-8')
+                response = urllib.request.urlopen("http://{}:12000".format(ip_address), timeout=10).read().decode('utf-8')
                 gpus = json.loads(response)
                 for gpu_data in gpus:
                     gpu = GPU.objects.filter(device=device, uuid=gpu_data["uuid"])
