@@ -16,22 +16,9 @@
     </title>
 
     <!-- Bootstrap Core CSS -->
-    <link href="{% static "bower_components/bootstrap/dist/css/bootstrap.min.css" %}" rel="stylesheet">
+    <link href="{% static "Bootstrap-3.3.5/css/bootstrap.min.css" %}" rel="stylesheet">
+    <link href="{% static "Bootstrap-3.3.5/fonts/glyphicons-halflings-regular.woff" %}" rel="stylesheet">
 
-    <!-- MetisMenu CSS -->
-    <link href="{% static "bower_components/metisMenu/dist/metisMenu.min.css" %}" rel="stylesheet">
-
-    <!-- Timeline CSS -->
-    <link href="{% static "dist/css/timeline.css" %}" rel="stylesheet">
-
-    <!-- Custom CSS -->
-    <link href="{% static "dist/css/sb-admin-2.css"%}" rel="stylesheet">
-
-    <!-- Morris Charts CSS -->
-    <link href="{% static "bower_components/morrisjs/morris.css"%}" rel="stylesheet">
-
-    <!-- Custom Fonts -->
-    <link href="{% static "bower_components/font-awesome/css/font-awesome.min.css" %}" rel="stylesheet" type="text/css">
 
     <style type="text/css">
         #content-wrapper {
@@ -56,47 +43,52 @@
     <div id="wrapper">
 
         <!-- Navigation -->
-        <nav class="navbar navbar-default navbar-static-top" role="navigation" style="margin-bottom: 0">
-            <div class="navbar-header">
-                <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
-                    <span class="sr-only">Toggle navigation</span>
-                    <span class="icon-bar"></span>
-                    <span class="icon-bar"></span>
-                    <span class="icon-bar"></span>
-                </button>
-                <a class="navbar-brand" href="index.html">LabShare</a>
-            </div>
-            <!-- /.navbar-header -->
+        <nav class="navbar navbar-inverse navbar-static-top" role="navigation" style="margin-bottom: 0">
+            <div class="container">
+                <div class="navbar-header">
+                    <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar-content">
+                        <span class="sr-only">Toggle navigation</span>
+                        <span class="icon-bar"></span>
+                        <span class="icon-bar"></span>
+                        <span class="icon-bar"></span>
+                    </button>
+                    <a class="navbar-brand" href="{% url "index" %}">LabShare</a>
+                </div>
+                <!-- /.navbar-header -->
 
-            <ul class="nav navbar-top-links navbar-right">
-                <li>
-                    <a href="{% url "index" %}"><i class="fa fa-dashboard fa-fw"></i> Dashboard</a>
-                </li>
-                {% if user.is_authenticated %}
-                    <li>
-                        <a href="{% url "reserve" %}"><i class="fa fa-bookmark fa-fw"></i> Reserve</a>
-                    </li>
-                {% endif %}
-                <li class="dropdown">
-                    <a class="dropdown-toggle" data-toggle="dropdown" href="#">
-                        <i class="fa fa-user fa-fw"></i>  <i class="fa fa-caret-down"></i>
-                    </a>
-                    <ul class="dropdown-menu dropdown-user">
+                <div class="collapse navbar-collapse" id="navbar-content">
+                    <ul class="nav navbar-nav navbar-right">
                         <li>
-                            {% if request.user.is_authenticated %}
-                                <a href="{% url "password_change" %}"><i class="fa fa-wrench fa-fw"></i> Change Password</a>
-                                <div class="divider"></div>
-                                <a href="{% url "logout" %}"><i class="fa fa-sign-out fa-fw"></i> Logout</a>
-                            {% else %}
-                                <a href="{% url "login" %}"><i class="fa fa-sign-in fa-fw"></i> Login</a>
-                            {% endif %}
+                            <a href="{% url "index" %}"><span class="glyphicon glyphicon-th-list"></span> Dashboard</a>
                         </li>
+                        {% if user.is_authenticated %}
+                            <li>
+                                <a href="{% url "reserve" %}"><i class="glyphicon glyphicon-pencil"></i> Reserve</a>
+                            </li>
+                            <li class="navbar-text">Logged in as: {{ user.username }}</li>
+                            <li class="dropdown">
+                                <a class="dropdown-toggle" data-toggle="dropdown" href="#">
+                                    <i class="glyphicon glyphicon-user"></i>  <i class="glyphicon glyphicon-menu-down"></i>
+                                </a>
+                                <ul class="dropdown-menu dropdown-user">
+                                    <li>
+                                        {% if user.is_staff %}
+                                            <a href="{% url "admin:index" %}"><i class="glyphicon glyphicon-sunglasses"></i> Admin Area</a>
+                                            <div class="divider"></div>
+                                        {% endif %}
+                                        <a href="{% url "password_change" %}"><i class="glyphicon glyphicon-wrench"></i> Change Password</a>
+                                        <div class="divider"></div>
+                                        <a href="{% url "logout" %}"><i class="glyphicon glyphicon-log-out"></i> Logout</a>
+                                    </li>
+                                </ul>
+                            </li>
+                        {% else %}
+                            <li><a href="{% url "login" %}"><i class="glyphicon glyphicon-log-in"></i> Login</a></li>
+                        {% endif %}
                     </ul>
-                    <!-- /.dropdown-user -->
-                </li>
-                <!-- /.dropdown -->
-            </ul>
-            <!-- /.navbar-top-links -->
+                    <!-- /.navbar-top-links -->
+                </div>
+            </div>
         </nav>
     </div>
 
@@ -106,21 +98,10 @@
 
     {% block scripts %}
         <!-- jQuery -->
-        <script src="{% static "bower_components/jquery/dist/jquery.min.js" %}"></script>
+        <script src="{% static "jQuery-2.1.4/jquery-2.1.4.min.js" %}"></script>
 
         <!-- Bootstrap Core JavaScript -->
-        <script src="{% static "bower_components/bootstrap/dist/js/bootstrap.min.js" %}"></script>
-
-        <!-- Metis Menu Plugin JavaScript -->
-        <script src="{% static "bower_components/metisMenu/dist/metisMenu.min.js" %}"></script>
-
-        <!-- Morris Charts JavaScript
-        <script src="{% static "bower_components/raphael/raphael-min.js" %}"></script>
-        <script src="{% static "bower_components/morrisjs/morris.min.js" %}"></script>
-        <script src="{% static "js/morris-data.js" %}"></script>-->
-
-        <!-- Custom Theme JavaScript -->
-        <script src="{% static "dist/js/sb-admin-2.js" %}"></script>
+        <script src="{% static "Bootstrap-3.3.5/js/bootstrap.min.js" %}"></script>
     {% endblock %}
 </body>
 

@@ -5,60 +5,53 @@
 
 {% block extra_css %}
     <!-- DataTables CSS -->
-    <link href="{% static "bower_components/datatables-plugins/integration/bootstrap/3/dataTables.bootstrap.css" %}" rel="stylesheet">
+    <link href="{% static "DataTables-1.10.9/css/dataTables.bootstrap.min.css" %}" rel="stylesheet">
 
     <!-- DataTables Responsive CSS -->
-    <link href="{% static "bower_components/datatables-responsive/css/dataTables.responsive.css" %}" rel="stylesheet">
+    <link href="{% static "Responsive-1.0.7/css/responsive.bootstrap.min.css" %}" rel="stylesheet">
 {% endblock %}
 
 {% block content %}
-    <div class="row">
-        <div class="col-lg-12">
-            <h1 class="page-header">Overview</h1>
-        </div>
-        <!-- /.col-lg-12 -->
-    </div>
-    <!-- /.row -->
-    <div class="row">
-        <div class="col-lg-12">
-            <div class="panel panel-default">
-                <div class="panel-body">
-                    <table class="table table-striped table-hover" id="overview-table">
-                        <thead>
-                            <tr>
-                                <th>Device</th>
-                                <th>GPU</th>
-                                <th>Memory Usage (Free/Used/Total)</th>
-                                <th>Last Updated</th>
-                                <th>Current User</th>
-                                <th>Next User</th>
-                                <th></th>
-                            </tr>
-                        </thead>
-                        <tbody style="background-color: #fff;">
-                            {% for device in devices %}
-                                {% for gpu in device.gpus.all %}
-                                    <tr>
-                                        <td>{{ device.name }}</td>
-                                        <td>{{ gpu.model_name }}</td>
-                                        <td>{{ gpu.free_memory }} / {{ gpu.used_memory }} / {{ gpu.total_memory }}</td>
-                                        <td>{{ gpu.last_updated }}</td>
-                                        <td>{{ gpu|current_reservation }}</td>
-                                        <td>{{ gpu|next_reservation }}</td>
-                                        <td>
-                                            {% if gpu|current_reservation == user %}
-                                                <a class="btn btn-xs btn-success" href="{% url "done_with_gpu" gpu.id %}">Done</a>
-                                            {% endif %}
-                                        </td>
-                                    </tr>
-                                {% endfor %}
+    <h1 class="page-header">Overview</h1>
+
+
+    <div class="col-lg-12">
+        <div class="panel panel-default">
+            <div class="panel-body">
+                <table class="table table-striped table-hover" id="overview-table">
+                    <thead>
+                        <tr>
+                            <th>Device</th>
+                            <th>GPU</th>
+                            <th>Memory Usage (Free/Used/Total)</th>
+                            <th>Last Updated</th>
+                            <th>Current User</th>
+                            <th>Next User</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody style="background-color: #fff;">
+                        {% for device in devices %}
+                            {% for gpu in device.gpus.all %}
+                                <tr>
+                                    <td>{{ device.name }}</td>
+                                    <td>{{ gpu.model_name }}</td>
+                                    <td>{{ gpu.free_memory }} / {{ gpu.used_memory }} / {{ gpu.total_memory }}</td>
+                                    <td>{{ gpu.last_updated }}</td>
+                                    <td>{{ gpu|current_reservation }}</td>
+                                    <td>{{ gpu|next_reservation }}</td>
+                                    <td>
+                                        {% if gpu|current_reservation == user %}
+                                            <a class="btn btn-xs btn-success" href="{% url "done_with_gpu" gpu.id %}">Done</a>
+                                        {% endif %}
+                                    </td>
+                                </tr>
                             {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
+                        {% endfor %}
+                    </tbody>
+                </table>
             </div>
         </div>
-        <!-- /.col-lg-12 -->
     </div>
     <!-- /.row -->
 {% endblock %}
@@ -66,19 +59,16 @@
 {% block scripts %}
     {{ block.super }}
     <!-- DataTables JavaScript -->
-    <script src="{% static "bower_components/datatables/media/js/jquery.dataTables.min.js" %}"></script>
-    <script src="{% static "bower_components/datatables-plugins/integration/bootstrap/3/dataTables.bootstrap.min.js" %}"></script>
+    <script src="{% static "DataTables-1.10.9/js/jquery.dataTables.min.js" %}"></script>
+    <script src="{% static "DataTables-1.10.9/js/dataTables.bootstrap.min.js" %}"></script>
+    <script src="{% static "Responsive-1.0.7/js/dataTables.responsive.min.js" %}"></script>
 
      <script>
     $(document).ready(function() {
         $('#overview-table').DataTable({
             responsive: true,
-            columnDefs:
-            [
-                {
-                    orderable: false,
-                    targets: 5
-                }
+            "columnDefs": [
+                {"orderable": false, "targets": 6}
             ]
         });
     });
