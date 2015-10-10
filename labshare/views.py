@@ -2,7 +2,7 @@ import json
 
 from django.contrib.auth.decorators import login_required
 from django.core.urlresolvers import reverse
-from django.http import HttpResponseRedirect, HttpResponseBadRequest, HttpResponse
+from django.http import HttpResponseRedirect, HttpResponseBadRequest, HttpResponse, HttpResponseForbidden
 from django.shortcuts import render
 
 from .forms import DeviceSelectForm
@@ -17,7 +17,7 @@ def index(request):
     })
 
 
-@login_required()
+@login_required
 def reserve(request):
     form = DeviceSelectForm(request.POST or None)
     if form.is_valid():
@@ -31,7 +31,7 @@ def reserve(request):
     })
 
 
-@login_required()
+@login_required
 def gpus(request):
     if request.method != "GET" or not request.is_ajax():
         return HttpResponseBadRequest()
@@ -44,3 +44,15 @@ def gpus(request):
             "name": gpu.model_name} for gpu in device.gpus.all()]
     }
     return HttpResponse(json.dumps(return_data, indent=4))
+
+
+@login_required
+def gpu_done(request, gpu_id):
+    gpu = GPU.objects.get(pk=gpu_id)
+    current_reservation = gpu.reservations.order_by("time_reserved").first()
+
+    if current_reservation.user != request.user:
+        return HttpResponseForbidden()
+
+    current_reservation.delete()
+    return HttpResponseRedirect(reverse("index"))

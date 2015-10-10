@@ -13,6 +13,7 @@ class Device(models.Model):
 class GPU(models.Model):
     uuid = models.CharField(max_length=255)
     device = models.ForeignKey(Device, related_name="gpus")
+    last_updated = models.DateTimeField(auto_now=True)
     model_name = models.CharField(max_length=255)
     free_memory = models.CharField(max_length=100)
     used_memory = models.CharField(max_length=100)
@@ -25,3 +26,4 @@ class GPU(models.Model):
 class Reservation(models.Model):
     gpu = models.ForeignKey(GPU, related_name="reservations")
     user = models.ForeignKey(User, related_name="reservations")
+    time_reserved = models.DateTimeField(auto_now_add=True)
