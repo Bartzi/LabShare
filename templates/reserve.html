@@ -24,6 +24,23 @@
                     </select>
                 </div>
             </div>
+            <div class="form-group hidden" id="gpu-info">
+                <div class="col-sm-offset-2 col-sm-10">
+                    <span class="help-block">
+                        <div class="panel panel-default">
+                            <div class="panel-heading">GPU Info</div>
+                            <div class="panel-body">
+                                <ul class="list-group">
+                                    <li class="list-group-item">Free Memory: <span id="gpu-info-free"></span> </li>
+                                    <li class="list-group-item">Used Memory: <span id="gpu-info-used"></span></li>
+                                    <li class="list-group-item">Total Memory: <span id="gpu-info-total"></span></li>
+                                    <li class="list-group-item">Current User: <span id="gpu-info-user"></span></li>
+                                </ul>
+                            </div>
+                        </div>
+                    </span>
+                </div>
+            </div>
             <div class="form-group">
                 <div class="col-sm-offset-2 col-sm-10">
                     <button type="submit" class="btn btn-primary" id="reserve-button" disabled>Reserve</button>
@@ -51,16 +68,34 @@
                 });
                 gpuSelect.prop("disabled", false);
                 $('#reserve-button').prop("disabled", false);
+                update_gpu_info();
+                gpuInfo.removeClass("hidden");
+            });
+        }
+
+        function update_gpu_info() {
+            var selectedGPU = gpuSelect.find(":selected").val();
+            $.get("{% url "gpu_info" %}?uuid=" + selectedGPU, {}, function(data, textStatus, jqXHR) {
+                data = JSON.parse(data);
+                $("#gpu-info-free").html(data["free"]);
+                $("#gpu-info-used").html(data["used"]);
+                $("#gpu-info-total").html(data["total"]);
+                $('#gpu-info-user').html(data["user"]);
             });
         }
 
         var deviceSelect = $('#selectDevice');
         var gpuSelect = $('#selectGPU');
+        var gpuInfo = $('#gpu-info');
         get_gpus(deviceSelect, gpuSelect);
 
         deviceSelect.change(function() {
             get_gpus(deviceSelect, gpuSelect);
-        })
+        });
+
+        gpuSelect.change(function() {
+            update_gpu_info();
+        });
 
     </script>
 {% endblock %}

@@ -47,6 +47,24 @@ def gpus(request):
 
 
 @login_required
+def gpu_info(request):
+    if request.method != "GET" or not request.is_ajax():
+        return HttpResponseBadRequest()
+
+    gpu = GPU.objects.get(uuid=request.GET['uuid'])
+    current_reservation = gpu.reservations.order_by("time_reserved").first()
+
+    return_data = {
+        "free": gpu.free_memory,
+        "used": gpu.used_memory,
+        "total": gpu.total_memory,
+        "user": current_reservation.user.username if current_reservation is not None else "No current user",
+    }
+
+    return HttpResponse(json.dumps(return_data, indent=4))
+
+
+@login_required
 def gpu_done(request, gpu_id):
     gpu = GPU.objects.get(pk=gpu_id)
     current_reservation = gpu.reservations.order_by("time_reserved").first()
