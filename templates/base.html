@@ -26,7 +26,6 @@
             padding: 0 15px;
             min-height: 568px;
         }
-
     </style>
 
     {% block extra_css %}{% endblock %}
@@ -91,6 +90,12 @@
     <div class="container" id="content-wrapper">
         {% block content %}{% endblock %}
     </div>
+
+    <nav class="navbar navbar-inverse navbar-fixed-bottom">
+        <div class="container">
+            <p class="navbar-text">Powered by: <a class="navbar-link" href="https://github.com/bartzi/labshare">LabShare</a></p>
+        </div>
+    </nav>
 
     {% block scripts %}
         <!-- jQuery -->
