@@ -68,13 +68,19 @@
                 });
                 gpuSelect.prop("disabled", false);
                 $('#reserve-button').prop("disabled", false);
-                update_gpu_info();
                 gpuInfo.removeClass("hidden");
+                update_gpu_info();
             });
         }
 
         function update_gpu_info() {
             var selectedGPU = gpuSelect.find(":selected").val();
+
+            if (typeof selectedGPU == "undefined") {
+                gpuInfo.addClass("hidden");
+                return;
+            }
+
             $.get("{% url "gpu_info" %}?uuid=" + selectedGPU, {}, function(data, textStatus, jqXHR) {
                 data = JSON.parse(data);
                 $("#gpu-info-free").html(data["free"]);
