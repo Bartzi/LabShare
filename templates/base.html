@@ -41,8 +41,6 @@
 
 <body>
     <div id="wrapper">
-
-        <!-- Navigation -->
         <nav class="navbar navbar-inverse navbar-static-top" role="navigation" style="margin-bottom: 0">
             <div class="container">
                 <div class="navbar-header">
@@ -54,7 +52,6 @@
                     </button>
                     <a class="navbar-brand" href="{% url "index" %}">LabShare</a>
                 </div>
-                <!-- /.navbar-header -->
 
                 <div class="collapse navbar-collapse" id="navbar-content">
                     <ul class="nav navbar-nav navbar-right">
@@ -78,7 +75,7 @@
                                         {% endif %}
                                         <a href="{% url "password_change" %}"><i class="glyphicon glyphicon-wrench"></i> Change Password</a>
                                         <div class="divider"></div>
-                                        <a href="{% url "logout" %}"><i class="glyphicon glyphicon-log-out"></i> Logout</a>
+                                        <a href="{% url "logout" %}?next={% url "index" %}"><i class="glyphicon glyphicon-log-out"></i> Logout</a>
                                     </li>
                                 </ul>
                             </li>
@@ -86,7 +83,6 @@
                             <li><a href="{% url "login" %}"><i class="glyphicon glyphicon-log-in"></i> Login</a></li>
                         {% endif %}
                     </ul>
-                    <!-- /.navbar-top-links -->
                 </div>
             </div>
         </nav>
