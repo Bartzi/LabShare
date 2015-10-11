@@ -72,7 +72,7 @@ DATABASES = {
     }
 }
 
-EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+EMAIL_HOST = "localhost:1025"
 FROM_EMAIL = "admin@labshare.labshare"
 
 # Internationalization

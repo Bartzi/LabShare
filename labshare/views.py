@@ -1,13 +1,13 @@
 import json
 
 from django.contrib.auth.decorators import login_required
-from django.core.mail import send_mail
 from django.core.urlresolvers import reverse
 from django.http import HttpResponseRedirect, HttpResponseBadRequest, HttpResponse, HttpResponseForbidden, Http404
 from django.shortcuts import render
 
 from .forms import DeviceSelectForm
 from labshare import settings
+from .utils import send_email
 from .models import Device, Reservation, GPU
 
 
@@ -29,15 +29,13 @@ def reserve(request):
 
         if gpu.reservations.count() > 1:
             current_reservation = gpu.reservations.order_by("time_reserved").first()
-            send_mail(
+            send_email(
+                current_reservation.user.email,
                 "New reservation on GPU",
                 render(request, "mails/new_reservation.txt", {
                         "gpu": gpu,
                         "reservation": current_reservation
                     }).content.decode('utf-8'),
-                settings.FROM_EMAIL,
-                [current_reservation.user.email],
-                fail_silently=False
             )
 
         return HttpResponseRedirect(reverse("index"))
@@ -96,12 +94,10 @@ def gpu_done(request, gpu_id):
     # get the user of the reservation that is now current and send him an email
     current_reservation = gpu.reservations.order_by("time_reserved").first()
     if current_reservation is not None:
-        send_mail(
+        send_email(
+            current_reservation.user.email,
             "GPU free for use",
             render(request, "mails/gpu_free.txt", {"gpu": gpu, "reservation": current_reservation}).content.decode('utf-8'),
-            settings.FROM_EMAIL,
-            [current_reservation.user.email],
-            fail_silently=False
         )
 
     return HttpResponseRedirect(reverse("index"))
