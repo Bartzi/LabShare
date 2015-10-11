@@ -1,0 +1,7 @@
+Hi {{reservation.user.username}},
+
+The GPU you reserved at LabShare is now available for you to use.
+You reserved the GPU {{gpu.model_name}} belonging to {{gpu.device.name}}.
+
+Best Regards,
+LabShare

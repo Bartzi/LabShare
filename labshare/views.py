@@ -1,11 +1,13 @@
 import json
 
 from django.contrib.auth.decorators import login_required
+from django.core.mail import send_mail
 from django.core.urlresolvers import reverse
-from django.http import HttpResponseRedirect, HttpResponseBadRequest, HttpResponse, HttpResponseForbidden
+from django.http import HttpResponseRedirect, HttpResponseBadRequest, HttpResponse, HttpResponseForbidden, Http404
 from django.shortcuts import render
 
 from .forms import DeviceSelectForm
+from labshare import settings
 from .models import Device, Reservation, GPU
 
 
@@ -24,6 +26,20 @@ def reserve(request):
         gpu = GPU.objects.get(uuid=form.data["gpu"])
         reservation = Reservation(gpu=gpu, user=request.user)
         reservation.save()
+
+        if gpu.reservations.count() > 1:
+            current_reservation = gpu.reservations.order_by("time_reserved").first()
+            send_mail(
+                "New reservation on GPU",
+                render(request, "mails/new_reservation.txt", {
+                        "gpu": gpu,
+                        "reservation": current_reservation
+                    }).content.decode('utf-8'),
+                settings.FROM_EMAIL,
+                [current_reservation.user.email],
+                fail_silently=False
+            )
+
         return HttpResponseRedirect(reverse("index"))
 
     return render(request, "reserve.html", {
@@ -69,8 +85,23 @@ def gpu_done(request, gpu_id):
     gpu = GPU.objects.get(pk=gpu_id)
     current_reservation = gpu.reservations.order_by("time_reserved").first()
 
+    if current_reservation is None:
+        raise Http404
+
     if current_reservation.user != request.user:
         return HttpResponseForbidden()
 
     current_reservation.delete()
+
+    # get the user of the reservation that is now current and send him an email
+    current_reservation = gpu.reservations.order_by("time_reserved").first()
+    if current_reservation is not None:
+        send_mail(
+            "GPU free for use",
+            render(request, "mails/gpu_free.txt", {"gpu": gpu, "reservation": current_reservation}).content.decode('utf-8'),
+            settings.FROM_EMAIL,
+            [current_reservation.user.email],
+            fail_silently=False
+        )
+
     return HttpResponseRedirect(reverse("index"))
