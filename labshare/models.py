@@ -11,7 +11,7 @@ class Device(models.Model):
 
 
 class GPU(models.Model):
-    uuid = models.CharField(max_length=255)
+    uuid = models.CharField(unique=True, max_length=255)
     device = models.ForeignKey(Device, related_name="gpus")
     last_updated = models.DateTimeField(auto_now=True)
     model_name = models.CharField(max_length=255)
