@@ -72,8 +72,10 @@ DATABASES = {
     }
 }
 
-EMAIL_HOST = "localhost:1025"
-FROM_EMAIL = "admin@labshare.labshare"
+EMAIL_BACKEND = 'labshare.backends.mail.open_smtp.OpenSMTPBackend'
+EMAIL_HOST = "localhost"
+EMAIL_PORT = "25"
+DEFAULT_FROM_EMAIL = "admin@labshare.labshare"
 
 # Internationalization
 # https://docs.djangoproject.com/en/1.8/topics/i18n/
