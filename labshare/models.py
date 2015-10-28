@@ -22,6 +22,11 @@ class GPU(models.Model):
     def __str__(self):
         return self.model_name
 
+    def in_use(self):
+        used_mem = int(self.used_memory.split()[0])
+        # device is in use if more than 800 MiB of video ram are in use
+        return True if used_mem > 800 else False
+
 
 class Reservation(models.Model):
     gpu = models.ForeignKey(GPU, related_name="reservations")

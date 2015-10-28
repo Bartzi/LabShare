@@ -24,7 +24,7 @@
                             <th>Device</th>
                             <th>GPU</th>
                             <th>Memory Usage (Free/Used/Total)</th>
-                            <th>Last Updated</th>
+                            <th>Last Update</th>
                             <th>Current User</th>
                             <th>Next User</th>
                             <th></th>
@@ -33,7 +33,7 @@
                     <tbody style="background-color: #fff;">
                         {% for device in devices %}
                             {% for gpu in device.gpus.all %}
-                                <tr>
+                                <tr {% if gpu.in_use %}class="warning"{% endif %}>
                                     <td>{{ device.name }}</td>
                                     <td>{{ gpu.model_name }}</td>
                                     <td>{{ gpu.free_memory }} / {{ gpu.used_memory }} / {{ gpu.total_memory }}</td>
