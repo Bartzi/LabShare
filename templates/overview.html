@@ -64,13 +64,22 @@
     <script src="{% static "Responsive-1.0.7/js/dataTables.responsive.min.js" %}"></script>
 
      <script>
-    $(document).ready(function() {
-        $('#overview-table').DataTable({
-            responsive: true,
-            "columnDefs": [
-                {"orderable": false, "targets": 6}
-            ]
-        });
-    });
+     function refreshPage() {
+         window.location.reload(true);
+         setTimeout(refreshPage, 300000);
+     }
+
+     $(document).ready(function() {
+         $('#overview-table').DataTable({
+             responsive: true,
+             "columnDefs": [
+                 {"orderable": false, "targets": 6}
+             ]
+         });
+
+         setTimeout(refreshPage, 300000);
+     });
+
+
     </script>
 {% endblock %}
