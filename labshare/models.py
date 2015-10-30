@@ -32,3 +32,6 @@ class Reservation(models.Model):
     gpu = models.ForeignKey(GPU, related_name="reservations")
     user = models.ForeignKey(User, related_name="reservations")
     time_reserved = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return "{gpu} on {device}, {user}".format(device=self.gpu.device, gpu=self.gpu, user=self.user)
