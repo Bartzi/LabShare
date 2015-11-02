@@ -8,6 +8,7 @@ from django.shortcuts import render
 
 from .forms import DeviceSelectForm
 from labshare import settings
+from labshare.utils import send_reservation_mail_for, send_gpu_done_mail
 from .models import Device, Reservation, GPU
 
 
@@ -23,21 +24,27 @@ def index(request):
 def reserve(request):
     form = DeviceSelectForm(request.POST or None)
     if form.is_valid():
-        gpu = GPU.objects.get(uuid=form.data["gpu"])
-        reservation = Reservation(gpu=gpu, user=request.user)
-        reservation.save()
+        if json.loads(form.data["next-available-spot"]):
+            device = Device.objects.get(name=form.data["device"])
+            # first check whether a gpu is already available on that given machine
+            for gpu in device.gpus.all():
+                if gpu.reservations.count() is 0:
+                    reservation = Reservation(gpu=gpu, user=request.user)
+                    reservation.save()
+                    send_gpu_done_mail(request, gpu, reservation)
+                    return HttpResponseRedirect(reverse("index"))
 
-        if gpu.reservations.count() > 1:
-            current_reservation = gpu.reservations.order_by("time_reserved").first()
-            send_mail(
-                "New reservation on GPU",
-                render(request, "mails/new_reservation.txt", {
-                        "gpu": gpu,
-                        "reservation": current_reservation
-                    }).content.decode('utf-8'),
-                settings.DEFAULT_FROM_EMAIL,
-                [current_reservation.user.email],
-            )
+            # if there is no gpu available right now reserve all on this device and mark them as special reservation
+            for gpu in device.gpus.all():
+                reservation = Reservation(gpu=gpu, user=request.user, user_reserved_next_available_spot=True)
+                reservation.save()
+                send_reservation_mail_for(request, gpu)
+        else:
+            gpu = GPU.objects.get(uuid=form.data["gpu"])
+            reservation = Reservation(gpu=gpu, user=request.user)
+            reservation.save()
+
+            send_reservation_mail_for(request, gpu)
 
         return HttpResponseRedirect(reverse("index"))
 
@@ -95,11 +102,20 @@ def gpu_done(request, gpu_id):
     # get the user of the reservation that is now current and send him an email
     current_reservation = gpu.reservations.order_by("time_reserved").first()
     if current_reservation is not None:
-        send_mail(
-            "GPU free for use",
-            render(request, "mails/gpu_free.txt", {"gpu": gpu, "reservation": current_reservation}).content.decode('utf-8'),
-            settings.DEFAULT_FROM_EMAIL,
-            [current_reservation.user.email],
-        )
+        # clear all reservations made for this user if he only reserved the next available spot on this device
+        if current_reservation.user_reserved_next_available_spot:
+            device = current_reservation.gpu.device
+            reservations_to_delete = []
+            for gpu in device.gpus.all():
+                for reservation in gpu.reservations.all():
+                    if reservation == current_reservation:
+                        continue
+                    elif reservation.user == current_reservation.user and reservation.user_reserved_next_available_spot:
+                        reservations_to_delete.append(reservation)
+
+            for reservation in reservations_to_delete:
+                reservation.delete()
+
+        send_gpu_done_mail(request, gpu, current_reservation)
 
     return HttpResponseRedirect(reverse("index"))

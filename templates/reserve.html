@@ -5,8 +5,9 @@
         <h2>Reserve the next available Spot on a device.</h2>
     </div>
     <div class="row">
-        <form class="form-horizontal" action="{% url "reserve" %}" method="POST">
+        <form id="reserve-form" class="form-horizontal" action="{% url "reserve" %}" method="POST">
             {% csrf_token %}
+            <input type="hidden" name="next-available-spot" value="false">
             <div class="form-group">
                 <label for="selectDevice" class="col-sm-2 control-label">Device</label>
                 <div class="col-sm-10">
@@ -44,6 +45,7 @@
             <div class="form-group">
                 <div class="col-sm-offset-2 col-sm-10">
                     <button type="submit" class="btn btn-primary" id="reserve-button" disabled>Reserve</button>
+                    <button class="btn btn-success" id="next-available-spot-btn">Give me the next available spot on this device</button>
                 </div>
             </div>
         </form>
@@ -101,6 +103,12 @@
 
         gpuSelect.change(function() {
             update_gpu_info();
+        });
+
+        $("#next-available-spot-btn").on('click', function (event) {
+            var form = $("#reserve-form");
+            form.find("input[name='next-available-spot']").attr("value", "true");
+            form.submit();
         });
 
     </script>
