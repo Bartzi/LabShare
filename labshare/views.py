@@ -1,14 +1,13 @@
 import json
 
 from django.contrib.auth.decorators import login_required
-from django.core.mail import send_mail
+from django.core.exceptions import ObjectDoesNotExist
 from django.core.urlresolvers import reverse
 from django.http import HttpResponseRedirect, HttpResponseBadRequest, HttpResponse, HttpResponseForbidden, Http404
 from django.shortcuts import render
 
 from .forms import DeviceSelectForm
-from labshare import settings
-from labshare.utils import send_reservation_mail_for, send_gpu_done_mail
+from labshare.utils import send_reservation_mail_for, send_gpu_done_mail, login_required_ajax
 from .models import Device, Reservation, GPU
 
 
@@ -53,12 +52,15 @@ def reserve(request):
     })
 
 
-@login_required
+@login_required_ajax
 def gpus(request):
     if request.method != "GET" or not request.is_ajax():
         return HttpResponseBadRequest()
 
-    device_name = request.GET['device_name']
+    device_name = request.GET.get('device_name', None)
+    if device_name is None:
+        return HttpResponseBadRequest()
+
     device = Device.objects.get(name=device_name)
     return_data = {
         'gpus': [{
@@ -68,12 +70,16 @@ def gpus(request):
     return HttpResponse(json.dumps(return_data, indent=4))
 
 
-@login_required
+@login_required_ajax
 def gpu_info(request):
     if request.method != "GET" or not request.is_ajax():
         return HttpResponseBadRequest()
 
-    gpu = GPU.objects.get(uuid=request.GET['uuid'])
+    uuid = request.GET.get('uuid', None)
+    if uuid is None:
+        return HttpResponseBadRequest()
+
+    gpu = GPU.objects.get(uuid=uuid)
     current_reservation = gpu.reservations.order_by("time_reserved").first()
 
     return_data = {
@@ -88,7 +94,11 @@ def gpu_info(request):
 
 @login_required
 def gpu_done(request, gpu_id):
-    gpu = GPU.objects.get(pk=gpu_id)
+    try:
+        gpu = GPU.objects.get(pk=gpu_id)
+    except ObjectDoesNotExist:
+        raise Http404
+
     current_reservation = gpu.reservations.order_by("time_reserved").first()
 
     if current_reservation is None:
