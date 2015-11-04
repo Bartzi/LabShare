@@ -6,4 +6,5 @@ Django Tool that helps everyone to get their fair share of GPU time.
 
 1. clone repository
 2. install requirements with `pip install -r requirements.txt` (make sure to use python 3!)
-3. run the test server with `python manage.py runserver`
+3. create database by running `python manage.py migrate`
+4. run the test server with `python manage.py runserver`
