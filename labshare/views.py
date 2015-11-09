@@ -129,3 +129,26 @@ def gpu_done(request, gpu_id):
         send_gpu_done_mail(request, gpu, current_reservation)
 
     return HttpResponseRedirect(reverse("index"))
+
+
+@login_required
+def gpu_cancel(request, gpu_id):
+    try:
+        gpu = GPU.objects.get(pk=gpu_id)
+    except ObjectDoesNotExist:
+        raise Http404
+
+    reservations = gpu.reservations.order_by("time_reserved").all()
+    if len(reservations) < 2:
+        raise Http404
+
+    next_reservation = reservations[1]
+    if next_reservation is None:
+        raise Http404
+
+    if next_reservation.user != request.user:
+        return HttpResponseForbidden()
+
+    next_reservation.delete()
+
+    return HttpResponseRedirect(reverse("index"))

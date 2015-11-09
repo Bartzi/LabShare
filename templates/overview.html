@@ -43,6 +43,8 @@
                                     <td>
                                         {% if gpu|current_reservation == user %}
                                             <a class="btn btn-xs btn-success" href="{% url "done_with_gpu" gpu.id %}">Done</a>
+                                        {% elif gpu|next_reservation == user %}
+                                            <a class="btn btn-xs btn-danger" href="{% url "cancel_gpu" gpu.id %}">Cancel</a>
                                         {% endif %}
                                     </td>
                                 </tr>

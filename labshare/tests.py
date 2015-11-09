@@ -313,10 +313,34 @@ class TestLabshare(WebTest):
         self.assertEqual(gpus.last().reservations.first().user, self.user)
         self.assertEqual(gpus.last().reservations.last().user, self.user)
 
+    def test_cancel_gpu_no_user(self):
+        response = self.app.get(reverse("cancel_gpu", args=[self.devices[0].gpus.first().id]))
+        self.assertEqual(response.status_code, 302)
 
+    def test_cancel_gpu_wrong_gpu_id(self):
+        response = self.app.get(reverse("cancel_gpu", args=[17]), user=self.user, expect_errors=True)
+        self.assertEqual(response.status_code, 404)
 
+    def test_cancel_gpu_no_reservation(self):
+        gpu = self.devices[0].gpus.first()
+        response = self.app.get(reverse("cancel_gpu", args=[gpu.id]), user=self.user, expect_errors=True)
+        self.assertEqual(response.status_code, 404)
 
+    def test_cancel_gpu_reservation_wrong_user(self):
+        gpu = self.devices[0].gpus.first()
+        users = mommy.make(User, _quantity=2)
+        mommy.make(Reservation, gpu=gpu, user=users[0])
+        mommy.make(Reservation, gpu=gpu, user=users[1])
 
+        response = self.app.get(reverse("cancel_gpu", args=[gpu.id]), user=self.user, expect_errors=True)
+        self.assertEqual(response.status_code, 403)
 
+    def test_cancel_gpu(self):
+        gpu = self.devices[0].gpus.first()
+        other = mommy.make(User)
+        mommy.make(Reservation, gpu=gpu, user=other)
+        mommy.make(Reservation, gpu=gpu, user=self.user)
 
-
+        response = self.app.get(reverse("cancel_gpu", args=[gpu.id]), user=self.user)
+        self.assertEqual(Reservation.objects.count(), 1)
+        self.assertEqual(gpu.reservations.first().user, other)
