@@ -138,8 +138,11 @@ def gpu_cancel(request, gpu_id):
     except ObjectDoesNotExist:
         raise Http404
 
-    next_reservation = gpu.reservations.order_by("time_reserved").all()[1]
+    reservations = gpu.reservations.order_by("time_reserved").all()
+    if len(reservations) < 2:
+        raise Http404
 
+    next_reservation = reservations[1]
     if next_reservation is None:
         raise Http404
 
