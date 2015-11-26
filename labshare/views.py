@@ -9,17 +9,16 @@ from django.shortcuts import render
 from .forms import DeviceSelectForm
 from labshare.utils import send_reservation_mail_for, send_gpu_done_mail, login_required_ajax
 from .models import Device, Reservation, GPU
+from labshare.decorators import render_to
 
-
+@render_to("overview.html")
 def index(request):
     devices = Device.objects.all()
-
-    return render(request, "overview.html", {
-        "devices": devices,
-    })
+    return {"devices": devices}
 
 
 @login_required
+@render_to("reserve.html")
 def reserve(request):
     form = DeviceSelectForm(request.POST or None)
     if form.is_valid():
@@ -47,9 +46,7 @@ def reserve(request):
 
         return HttpResponseRedirect(reverse("index"))
 
-    return render(request, "reserve.html", {
-        "form": form,
-    })
+    return {"form": form}
 
 
 @login_required_ajax
