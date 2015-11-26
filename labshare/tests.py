@@ -350,7 +350,7 @@ class TestLabshare(WebTest):
         for gpu in GPU.objects.all():
             last_updated = gpu.last_updated
             self.assertFalse(gpu.last_update_too_long_ago())
-            gpu.last_updated = last_updated - timedelta(seconds = 60 * 29)
+            gpu.last_updated = last_updated - timedelta(minutes = 29)
             self.assertFalse(gpu.last_update_too_long_ago())
-            gpu.last_updated = last_updated - timedelta(seconds = 60 * 30)
+            gpu.last_updated = last_updated - timedelta(minutes = 30)
             self.assertTrue(gpu.last_update_too_long_ago())

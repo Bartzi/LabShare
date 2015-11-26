@@ -31,7 +31,7 @@ class GPU(models.Model):
         return used_mem > 800
 
     def last_update_too_long_ago(self):
-        return self.last_updated < timezone.now() - timedelta(seconds = 60 * 30)
+        return self.last_updated < timezone.now() - timedelta(minutes = 30)
 
 
 class Reservation(models.Model):
