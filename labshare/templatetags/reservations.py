@@ -9,7 +9,6 @@ def current_reservation(gpu):
         return ""
     return reservations.order_by("time_reserved").first().user
 
-
 @register.filter
 def next_reservation(gpu):
     reservations = gpu.reservations.all()
