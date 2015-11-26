@@ -3,7 +3,7 @@ from django.core.urlresolvers import reverse
 from django_webtest import WebTest
 from labshare.models import Device, GPU, Reservation
 from model_mommy import mommy
-
+from datetime import timedelta
 
 class TestLabshare(WebTest):
 
@@ -344,3 +344,13 @@ class TestLabshare(WebTest):
         response = self.app.get(reverse("cancel_gpu", args=[gpu.id]), user=self.user)
         self.assertEqual(Reservation.objects.count(), 1)
         self.assertEqual(gpu.reservations.first().user, other)
+
+
+    def test_gpu_updated_too_long_ago(self):
+        for gpu in GPU.objects.all():
+            last_updated = gpu.last_updated
+            self.assertFalse(gpu.last_update_too_long_ago())
+            gpu.last_updated = last_updated - timedelta(minutes = 29)
+            self.assertFalse(gpu.last_update_too_long_ago())
+            gpu.last_updated = last_updated - timedelta(minutes = 30)
+            self.assertTrue(gpu.last_update_too_long_ago())

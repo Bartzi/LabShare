@@ -1,5 +1,8 @@
 from django.contrib.auth.models import User
 from django.db import models
+from django.utils import timezone
+
+from datetime import timedelta
 
 
 class Device(models.Model):
@@ -25,7 +28,10 @@ class GPU(models.Model):
     def in_use(self):
         used_mem = int(self.used_memory.split()[0])
         # device is in use if more than 800 MiB of video ram are in use
-        return True if used_mem > 800 else False
+        return used_mem > 800
+
+    def last_update_too_long_ago(self):
+        return self.last_updated < timezone.now() - timedelta(minutes = 30)
 
 
 class Reservation(models.Model):

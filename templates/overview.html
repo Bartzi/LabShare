@@ -2,6 +2,7 @@
 
 {% load staticfiles %}
 {% load reservations %}
+{% load icon %}
 
 {% block extra_css %}
     <!-- DataTables CSS -->
@@ -37,7 +38,7 @@
                                     <td>{{ device.name }}</td>
                                     <td>{{ gpu.model_name }}</td>
                                     <td>{{ gpu.free_memory }} / {{ gpu.used_memory }} / {{ gpu.total_memory }}</td>
-                                    <td>{{ gpu.last_updated }}</td>
+                                    <td>{{ gpu.last_updated }}{% if gpu.last_update_too_long_ago %} {% icon exclamation-sign %} {% endif %}</td>
                                     <td>{{ gpu|current_reservation }}</td>
                                     <td>{{ gpu|next_reservation }}</td>
                                     <td>
