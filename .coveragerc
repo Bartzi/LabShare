@@ -1,0 +1,9 @@
+[run]
+branch = True
+omit =
+	*/tests.py
+	*/migrations/*
+	labshare/wsgi.py
+	labshare/settings.py
+	labshare/management/commands/update.py
+source = labshare
