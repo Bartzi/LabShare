@@ -11,6 +11,7 @@ from labshare.models import Device, GPU, Reservation
 from labshare.admin import LabshareUserCreationForm
 
 from labshare.templatetags.icon import icon
+from labshare.templatetags.reservations import queue_position
 
 class TestLabshare(WebTest):
 
@@ -419,3 +420,16 @@ class TestLabshare(WebTest):
             device=reservation.gpu.device,
             user=reservation.user
         ))
+
+    def test_template_tag_position_in_queue(self):
+        gpu = self.devices[0].gpus.first()
+        other = mommy.make(User)
+        mommy.make(Reservation, gpu=gpu, user=other)
+        mommy.make(Reservation, gpu=gpu, user=self.user)
+
+        self.assertEqual(queue_position(gpu, self.user), 1)
+
+    def test_template_tag_position_in_queue_not_reserved(self):
+        gpu = self.devices[0].gpus.first()
+
+        self.assertIsNone(queue_position(gpu, self.user))

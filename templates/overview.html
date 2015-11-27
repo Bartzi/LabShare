@@ -28,6 +28,7 @@
                             <th>Last Update</th>
                             <th>Current User</th>
                             <th>Next User</th>
+                            <th title="People in the queue in front of you">Queue {% icon question-sign %}</th>
                             <th></th>
                         </tr>
                     </thead>
@@ -41,6 +42,9 @@
                                     <td>{{ gpu.last_updated }}{% if gpu.last_update_too_long_ago %} {% icon exclamation-sign %} {% endif %}</td>
                                     <td>{{ gpu|current_reservation }}</td>
                                     <td>{{ gpu|next_reservation }}</td>
+                                    <td>
+                                      {{ gpu|queue_position:user|default_if_none:"not in queue" }}
+                                    </td>
                                     <td>
                                         {% if gpu|current_reservation == user %}
                                             <a class="btn btn-xs btn-success" href="{% url "done_with_gpu" gpu.id %}">Done</a>
@@ -76,7 +80,7 @@
          $('#overview-table').DataTable({
              responsive: true,
              "columnDefs": [
-                 {"orderable": false, "targets": 6}
+                 {"orderable": false, "targets": [6, 7]}
              ]
          });
 
