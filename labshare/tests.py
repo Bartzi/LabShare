@@ -1,9 +1,16 @@
+from datetime import timedelta
+from unittest.mock import patch, Mock
+
+from django import template
 from django.contrib.auth.models import User
 from django.core.urlresolvers import reverse
 from django_webtest import WebTest
-from labshare.models import Device, GPU, Reservation
 from model_mommy import mommy
-from datetime import timedelta
+
+from labshare.models import Device, GPU, Reservation
+from labshare.admin import LabshareUserCreationForm
+
+from labshare.templatetags.icon import icon
 
 class TestLabshare(WebTest):
 
@@ -22,6 +29,26 @@ class TestLabshare(WebTest):
 
         for device in self.devices:
             self.assertIn(device.name, response.body.decode('utf-8'))
+
+    def test_index_containing_reservations(self):
+        user1 = mommy.make(User)
+        user2 = mommy.make(User)
+        mommy.make(Reservation, gpu=self.devices[0].gpus.first(), user=self.user)
+        mommy.make(Reservation, gpu=self.devices[0].gpus.first(), user=user1)
+        mommy.make(Reservation, gpu=self.devices[1].gpus.first(), user=user2)
+
+        response = self.app.get(reverse("index"))
+        self.assertEqual(response.status_code, 200)
+
+        for reservation in Reservation.objects.all():
+            self.assertIn(reservation.user.username, response.body.decode('utf-8'))
+
+        user3 = mommy.make(User)
+        mommy.make(Reservation, gpu=self.devices[0].gpus.first(), user=user3)
+
+        response = self.app.get(reverse("index"))
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn(user3.username, response.body.decode('utf-8'))
 
     def test_reserve_no_user(self):
         response = self.app.get(reverse("reserve"), expect_errors=True)
@@ -341,10 +368,9 @@ class TestLabshare(WebTest):
         mommy.make(Reservation, gpu=gpu, user=other)
         mommy.make(Reservation, gpu=gpu, user=self.user)
 
-        response = self.app.get(reverse("cancel_gpu", args=[gpu.id]), user=self.user)
+        self.app.get(reverse("cancel_gpu", args=[gpu.id]), user=self.user)
         self.assertEqual(Reservation.objects.count(), 1)
         self.assertEqual(gpu.reservations.first().user, other)
-
 
     def test_gpu_updated_too_long_ago(self):
         for gpu in GPU.objects.all():
@@ -354,3 +380,42 @@ class TestLabshare(WebTest):
             self.assertFalse(gpu.last_update_too_long_ago())
             gpu.last_updated = last_updated - timedelta(minutes = 30)
             self.assertTrue(gpu.last_update_too_long_ago())
+
+    def test_template_tag_icon_missing_icon_name(self):
+        parser = Mock()
+        attrs = {'split.return_value': ['icon']}
+        token = Mock(contents=Mock(**attrs))
+
+        self.assertRaises(template.TemplateSyntaxError, icon, parser, token)
+
+    def test_template_tag_icon_name_with_quote(self):
+        parser = Mock()
+        icon_name = 'wrench'
+        attrs = {'split.return_value': ['icon', '"{}"'.format(icon_name)]}
+        token = Mock(contents=Mock(**attrs))
+
+        node = icon(parser, token)
+        self.assertIn(icon_name, node.render(Mock()))
+
+    def test_template_tag_icon_too_many_arguments(self):
+        parser = Mock()
+        attrs = {'split.return_value': ['icon', 'icon-name', 'unexpected_string']}
+        token = Mock(contents=Mock(**attrs))
+
+        self.assertRaises(template.TemplateSyntaxError, icon, parser, token)
+
+    def test_device_str_representation(self):
+        device = mommy.prepare(Device)
+        self.assertEqual(str(device), device.name)
+
+    def test_gpu_str_representation(self):
+        gpu = mommy.prepare(GPU)
+        self.assertEqual(str(gpu), gpu.model_name)
+
+    def test_reservation_str_representation(self):
+        reservation = mommy.prepare(Reservation)
+        self.assertEqual(str(reservation), "{gpu} on {device}, {user}".format(
+            gpu=reservation.gpu,
+            device=reservation.gpu.device,
+            user=reservation.user
+        ))
