@@ -140,8 +140,6 @@ def gpu_cancel(request, gpu_id):
         raise Http404
 
     next_reservation = reservations[1]
-    if next_reservation is None:
-        raise Http404
 
     if next_reservation.user != request.user:
         return HttpResponseForbidden()

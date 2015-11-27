@@ -6,4 +6,6 @@ omit =
 	labshare/wsgi.py
 	labshare/settings.py
 	labshare/management/commands/update.py
+	labshare/backends/mail/open_smtp.py
+	labshare/admin.py
 source = labshare
