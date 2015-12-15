@@ -4,12 +4,13 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ObjectDoesNotExist
 from django.core.urlresolvers import reverse
 from django.http import HttpResponseRedirect, HttpResponseBadRequest, HttpResponse, HttpResponseForbidden, Http404
-from django.shortcuts import render
+from django.shortcuts import render, get_object_or_404
 
 from .forms import DeviceSelectForm
 from labshare.utils import send_reservation_mail_for, send_gpu_done_mail, login_required_ajax
 from .models import Device, Reservation, GPU
 from labshare.decorators import render_to
+
 
 @render_to("overview.html")
 def index(request):
@@ -91,10 +92,7 @@ def gpu_info(request):
 
 @login_required
 def gpu_done(request, gpu_id):
-    try:
-        gpu = GPU.objects.get(pk=gpu_id)
-    except ObjectDoesNotExist:
-        raise Http404
+    gpu = get_object_or_404(GPU, pk=gpu_id)
 
     current_reservation = gpu.reservations.order_by("time_reserved").first()
 
@@ -130,20 +128,8 @@ def gpu_done(request, gpu_id):
 
 @login_required
 def gpu_cancel(request, gpu_id):
-    try:
-        gpu = GPU.objects.get(pk=gpu_id)
-    except ObjectDoesNotExist:
-        raise Http404
-
-    reservations = gpu.reservations.order_by("time_reserved").all()
-    if len(reservations) < 2:
-        raise Http404
-
-    next_reservation = reservations[1]
-
-    if next_reservation.user != request.user:
-        return HttpResponseForbidden()
-
-    next_reservation.delete()
-
+    gpu = get_object_or_404(GPU, pk=gpu_id)
+    reservation = get_object_or_404(gpu.reservations, user__id=request.user.id)
+    reservation.delete()
+    
     return HttpResponseRedirect(reverse("index"))

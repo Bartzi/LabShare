@@ -361,7 +361,7 @@ class TestLabshare(WebTest):
         mommy.make(Reservation, gpu=gpu, user=users[1])
 
         response = self.app.get(reverse("cancel_gpu", args=[gpu.id]), user=self.user, expect_errors=True)
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.status_code, 404)
 
     def test_cancel_gpu(self):
         gpu = self.devices[0].gpus.first()
