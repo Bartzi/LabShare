@@ -43,18 +43,20 @@
                                     <td>{{ gpu|current_reservation }}</td>
                                     <td>{{ gpu|next_reservation }}</td>
                                     {% with queue_position=gpu|queue_position:user %}
-                                      <td>{{ queue_position|default_if_none:"--" }}</td>
-                                      <td>
-                                          {% if gpu|current_reservation == user %}
-                                              <a class="btn btn-xs btn-success" href="{% url "done_with_gpu" gpu.id %}">Done</a>
-                                          {% elif queue_position %}
-                                              <a class="btn btn-xs btn-danger" href="{% url "cancel_gpu" gpu.id %}">Cancel</a>
-                                          {% else %}
-                                              <button class="btn btn-xs btn-warning" id="reserve-btn" data-gpu="{{ gpu.uuid }}" data-device="{{ device.name }}">
-                                               Reserve
-                                             </button>
-                                          {% endif %}
-                                      </td>
+                                        <td>{{ queue_position|default_if_none:"--" }}</td>
+                                        <td>
+                                            {% if user.is_authenticated %}
+                                                {% if gpu|current_reservation == user %}
+                                                    <a class="btn btn-xs btn-success" href="{% url "done_with_gpu" gpu.id %}">Done</a>
+                                                {% elif queue_position %}
+                                                    <a class="btn btn-xs btn-danger" href="{% url "cancel_gpu" gpu.id %}">Cancel</a>
+                                                {% else %}
+                                                    <button class="btn btn-xs btn-warning" id="reserve-btn" data-gpu="{{ gpu.uuid }}" data-device="{{ device.name }}">
+                                                    Reserve
+                                                    </button>
+                                                {% endif %}
+                                            {% endif %}
+                                        </td>
                                     {% endwith %}
                                 </tr>
                             {% endfor %}
