@@ -39,6 +39,12 @@ class GPU(models.Model):
         except Reservation.DoesNotExist as e:
             return None
 
+    def last_reservation(self):
+        try:
+            return self.reservations.latest("time_reserved")
+        except Reservation.DoesNotExist as e:
+            return None
+
 
 class Reservation(models.Model):
     gpu = models.ForeignKey(GPU, related_name="reservations")

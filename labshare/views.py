@@ -130,7 +130,7 @@ def gpu_done(request, gpu_id):
 def gpu_cancel(request, gpu_id):
     gpu = get_object_or_404(GPU, pk=gpu_id)
     try:
-        reservation = gpu.reservations.filter(user__id=request.user.id).latest("time_reserved")
+        reservation = gpu.reservations.filter(user=request.user).latest("time_reserved")
         reservation.delete()
     except ObjectDoesNotExist as e:
         raise Http404
