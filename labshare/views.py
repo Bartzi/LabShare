@@ -78,7 +78,7 @@ def gpu_info(request):
         return HttpResponseBadRequest()
 
     gpu = GPU.objects.get(uuid=uuid)
-    current_reservation = gpu.reservations.order_by("time_reserved").first()
+    current_reservation = gpu.current_reservation()
 
     return_data = {
         "free": gpu.free_memory,
@@ -94,7 +94,7 @@ def gpu_info(request):
 def gpu_done(request, gpu_id):
     gpu = get_object_or_404(GPU, pk=gpu_id)
 
-    current_reservation = gpu.reservations.order_by("time_reserved").first()
+    current_reservation = gpu.current_reservation()
 
     if current_reservation is None:
         raise Http404
@@ -105,7 +105,7 @@ def gpu_done(request, gpu_id):
     current_reservation.delete()
 
     # get the user of the reservation that is now current and send him an email
-    current_reservation = gpu.reservations.order_by("time_reserved").first()
+    current_reservation = gpu.current_reservation()
     if current_reservation is not None:
         # clear all reservations made for this user if he only reserved the next available spot on this device
         if current_reservation.user_reserved_next_available_spot:
@@ -129,7 +129,10 @@ def gpu_done(request, gpu_id):
 @login_required
 def gpu_cancel(request, gpu_id):
     gpu = get_object_or_404(GPU, pk=gpu_id)
-    reservation = get_object_or_404(gpu.reservations, user__id=request.user.id)
-    reservation.delete()
-    
+    try:
+        reservation = gpu.reservations.filter(user__id=request.user.id).latest("time_reserved")
+        reservation.delete()
+    except ObjectDoesNotExist as e:
+        raise Http404
+
     return HttpResponseRedirect(reverse("index"))
