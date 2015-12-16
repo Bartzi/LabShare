@@ -354,6 +354,19 @@ class TestLabshare(WebTest):
         response = self.app.get(reverse("cancel_gpu", args=[gpu.id]), user=self.user, expect_errors=True)
         self.assertEqual(response.status_code, 404)
 
+    def test_cancel_gpu_multiple_reservation(self):
+        gpu = self.devices[0].gpus.first()
+        other = mommy.make(User)
+        mommy.make(Reservation, gpu=gpu, user=self.user)
+        mommy.make(Reservation, gpu=gpu, user=other)
+        mommy.make(Reservation, gpu=gpu, user=self.user)
+
+        self.assertEqual(gpu.last_reservation().user, self.user)
+        self.app.get(reverse("cancel_gpu", args=[gpu.id]), user=self.user)
+        self.assertEqual(Reservation.objects.count(), 2)
+        self.assertEqual(gpu.last_reservation().user, other)
+        self.assertEqual(gpu.current_reservation().user, self.user)
+
     def test_cancel_gpu_reservation_wrong_user(self):
         gpu = self.devices[0].gpus.first()
         users = mommy.make(User, _quantity=2)
@@ -371,7 +384,7 @@ class TestLabshare(WebTest):
 
         self.app.get(reverse("cancel_gpu", args=[gpu.id]), user=self.user)
         self.assertEqual(Reservation.objects.count(), 1)
-        self.assertEqual(gpu.reservations.first().user, other)
+        self.assertEqual(gpu.current_reservation().user, other)
 
     def test_gpu_updated_too_long_ago(self):
         for gpu in GPU.objects.all():

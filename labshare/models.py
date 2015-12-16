@@ -33,6 +33,18 @@ class GPU(models.Model):
     def last_update_too_long_ago(self):
         return self.last_updated < timezone.now() - timedelta(minutes = 30)
 
+    def current_reservation(self):
+        try:
+            return self.reservations.earliest("time_reserved")
+        except Reservation.DoesNotExist as e:
+            return None
+
+    def last_reservation(self):
+        try:
+            return self.reservations.latest("time_reserved")
+        except Reservation.DoesNotExist as e:
+            return None
+
 
 class Reservation(models.Model):
     gpu = models.ForeignKey(GPU, related_name="reservations")
