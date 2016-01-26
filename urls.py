@@ -15,5 +15,6 @@ urlpatterns = [
 
     url(r'^accounts/login', auth_views.login, {'template_name': 'login.html', }),
     url(r'^login/$', auth_views.login, {'template_name': 'login.html', }),
+    url(r'^mail/', include('multimail.urls')),
     url(r'^', include('django.contrib.auth.urls')),
 ]

@@ -13,6 +13,8 @@ def get_devices():
 def send_reservation_mail_for(request, gpu):
     if gpu.reservations.count() > 1:
         current_reservation = gpu.reservations.order_by("time_reserved").first()
+        email_addresses = [address.email for address in current_reservation.user.email_addresses.all()]
+        email_addresses.append(current_reservation.user.email)
         send_mail(
             "New reservation on GPU",
             render(request, "mails/new_reservation.txt", {
@@ -20,16 +22,18 @@ def send_reservation_mail_for(request, gpu):
                     "reservation": current_reservation
                 }).content.decode('utf-8'),
             settings.DEFAULT_FROM_EMAIL,
-            [current_reservation.user.email],
+            email_addresses,
         )
 
 
 def send_gpu_done_mail(request, gpu, reservation):
+    email_addresses = [address.email for address in reservation.user.email_addresses.all()]
+    email_addresses.append(reservation.user.email)
     send_mail(
         "GPU free for use",
         render(request, "mails/gpu_free.txt", {"gpu": gpu, "reservation": reservation}).content.decode('utf-8'),
         settings.DEFAULT_FROM_EMAIL,
-        [reservation.user.email],
+        email_addresses,
     )
 
 
