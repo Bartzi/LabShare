@@ -6,9 +6,9 @@ Django Tool that helps everyone to get their fair share of GPU time.
 
 1. clone repository
 2. install requirements with `pip install -r requirements.txt` (make sure to use python 3!)
-3. create database by running `python manage.py migrate`
-4. run the test server with `python manage.py runserver`
-5. 
+3. install [django-multimail](https://github.com/Bartzi/django-multimail.git) by cloning the repository and issuing `python setup.py install`
+4. create database by running `python manage.py migrate`
+5. run the test server with `python manage.py runserver`
 
 ## Usage
 
