@@ -4,12 +4,12 @@ from django.contrib.auth import admin as upstream
 from django.contrib.auth.forms import UserCreationForm, UserChangeForm
 from django.contrib.auth.models import User
 from django.utils.translation import ugettext_lazy as _
-from .models import Device, GPU, Reservation
-
+from .models import Device, GPU, Reservation, EmailAddress
 
 admin.site.register(Device)
 admin.site.register(GPU)
 admin.site.register(Reservation)
+admin.site.register(EmailAddress)
 
 
 class LabshareUserCreationForm(UserCreationForm):
