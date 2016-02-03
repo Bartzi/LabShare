@@ -54,3 +54,11 @@ class Reservation(models.Model):
 
     def __str__(self):
         return "{gpu} on {device}, {user}".format(device=self.gpu.device, gpu=self.gpu, user=self.user)
+
+
+class EmailAddress(models.Model):
+    user = models.ForeignKey(User, related_name="email_addresses")
+    email = models.EmailField(max_length=255, unique=True)
+
+    def __str__(self):
+        return "{}: {}".format(self.user, self.email)

@@ -27,7 +27,6 @@ INSTALLED_APPS = (
     'django.contrib.staticfiles',
     'django.contrib.sites',
     'labshare',
-    'multimail',
 )
 
 MIDDLEWARE_CLASSES = (
