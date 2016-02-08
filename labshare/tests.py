@@ -446,3 +446,85 @@ class TestLabshare(WebTest):
         gpu = self.devices[0].gpus.first()
 
         self.assertIsNone(queue_position(gpu, self.user))
+
+
+class TestMessages(WebTest):
+
+    csrf_checks = False
+
+    def setUp(self):
+        self.user = mommy.make(User, is_superuser=True, is_staff=True)
+        self.devices = mommy.make(Device, _quantity=3)
+        mommy.make(GPU, device=self.devices[0], _quantity=2, used_memory="12 Mib", free_memory="100 Mib", total_memory="112 Mib")
+        mommy.make(GPU, device=self.devices[1], used_memory="12 Mib", free_memory="100 Mib", total_memory="112 Mib")
+        mommy.make(GPU, device=self.devices[-1], used_memory="12 Mib", free_memory="100 Mib", total_memory="112 Mib")
+
+    def test_view_message_site_no_user(self):
+        response = self.app.get(reverse("send_message"), expect_errors=True)
+        self.assertEqual(response.status_code, 302)
+
+    def test_view_message_site_normal_user(self):
+        user = mommy.make(User)
+        response = self.app.get(reverse("send_message"), user=user)
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("Message all users", response.body.decode('utf-8'))
+
+    def test_view_message_site_superuser(self):
+        response = self.app.get(reverse("send_message"), user=self.user)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Message all users", response.body.decode('utf-8'))
+
+    def test_send_message_to_all_users(self):
+        response = self.app.get(reverse("send_message"), user=self.user)
+        self.assertEqual(response.status_code, 200)
+
+        form = response.form
+        form['message_all_users'] = True
+        form['subject'] = 'subject'
+        form['message'] = 'message'
+
+        response = form.submit()
+        self.assertEqual(response.status_code, 302)
+        self.assertRedirects(response, reverse("index"))
+
+    def test_send_message_to_specific_user(self):
+        response = self.app.get(reverse("send_message"), user=self.user)
+        self.assertEqual(response.status_code, 200)
+
+        form = response.form
+        form['recipient'] = '1'
+        form['subject'] = 'subject'
+        form['message'] = 'message'
+
+        response = form.submit()
+        self.assertEqual(response.status_code, 302)
+        self.assertRedirects(response, reverse("index"))
+
+    def test_send_message_to_all_not_permitted(self):
+        user = mommy.make(User)
+        response = self.app.get(reverse("send_message"), user=user)
+        self.assertEqual(response.status_code, 200)
+
+        form = response.form
+        self.assertNotIn('message_all_users', form.fields)
+
+        data = {
+            'message_all_users': True,
+            'subject': 'subject',
+            'message': 'message',
+        }
+
+        response = self.app.post(reverse("send_message"), params=data, user=user, expect_errors=True)
+        self.assertEqual(response.status_code, 400)
+
+    def test_send_message_no_recipient_selected(self):
+        response = self.app.get(reverse("send_message"), user=self.user)
+        self.assertEqual(response.status_code, 200)
+
+        form = response.form
+        form['subject'] = 'subject'
+        form['message'] = 'message'
+
+        response = form.submit()
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Please select a recipient", response.body.decode('utf-8'))

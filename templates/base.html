@@ -1,8 +1,8 @@
+{% load staticfiles icon %}
+{% load bootstrap3 %}
+
 <!DOCTYPE html>
 <html lang="en">
-
-{% load staticfiles icon %}
-
 <head>
 
     <meta charset="utf-8">
@@ -59,6 +59,9 @@
                         </li>
                         {% if user.is_authenticated %}
                             <li>
+                                <a href="{% url "send_message" %}">{% icon envelope %} Message a User</a>
+                            </li>
+                            <li>
                                 <a href="{% url "reserve" %}">{% icon pencil %} Reserve</a>
                             </li>
                             <li class="navbar-text">Logged in as: {{ user.username }}</li>
@@ -88,6 +91,8 @@
     </div>
 
     <div class="container" id="content-wrapper">
+        {% bootstrap_javascript jquery=1 %}
+        {% bootstrap_messages %}
         {% block content %}{% endblock %}
     </div>
 

@@ -27,6 +27,7 @@ INSTALLED_APPS = (
     'django.contrib.staticfiles',
     'django.contrib.sites',
     'labshare',
+    'bootstrap3',
 )
 
 MIDDLEWARE_CLASSES = (

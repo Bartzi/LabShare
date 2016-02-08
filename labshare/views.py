@@ -1,12 +1,15 @@
 import json
 
+from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth.models import User
 from django.core.exceptions import ObjectDoesNotExist
+from django.core.mail import send_mail
 from django.core.urlresolvers import reverse
 from django.http import HttpResponseRedirect, HttpResponseBadRequest, HttpResponse, HttpResponseForbidden, Http404
-from django.shortcuts import render, get_object_or_404
+from django.shortcuts import get_object_or_404
 
-from .forms import DeviceSelectForm
+from .forms import DeviceSelectForm, MessageForm
 from labshare.utils import send_reservation_mail_for, send_gpu_done_mail, login_required_ajax
 from .models import Device, Reservation, GPU
 from labshare.decorators import render_to
@@ -136,3 +139,44 @@ def gpu_cancel(request, gpu_id):
         raise Http404
 
     return HttpResponseRedirect(reverse("index"))
+
+
+@login_required
+@render_to("send_message.html")
+def send_message(request):
+    form = MessageForm(request.POST or None)
+    if form.is_valid():
+        sender = request.user
+
+        if form.cleaned_data.get('message_all_users'):
+            if not request.user.is_staff:
+                return HttpResponseBadRequest()
+            users = User.objects.all()
+            email_addresses = [user.email for user in users]
+            email_addresses.extend([address.email for user in users for address in user.email_addresses.all()])
+        else:
+            recipient = form.cleaned_data.get('recipient')
+            if recipient is None:
+                form.add_error('recipient', "Please select a recipient")
+                return {"form": form}
+            email_addresses = [address.email for address in recipient.email_addresses.all()]
+            email_addresses.append(recipient.email)
+
+        sender_addresses = [address.email for address in sender.email_addresses.all()]
+        sender_addresses.append(sender.email)
+        email_addresses.extend(sender_addresses)
+
+        subject = form.cleaned_data.get('subject')
+        message = form.cleaned_data.get('message')
+
+        send_mail(
+                subject,
+                message,
+                sender.email,
+                email_addresses,
+        )
+
+        messages.success(request, "Message sent!")
+        return HttpResponseRedirect(reverse("index"))
+
+    return {"form": form}
