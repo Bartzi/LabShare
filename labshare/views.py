@@ -165,7 +165,6 @@ def send_message(request):
                 return {"form": form}
             email_addresses = [address.email for address in recipient.email_addresses.all()]
             email_addresses.append(recipient.email)
-            email_addresses.extend(sender_addresses)
 
         subject = form.cleaned_data.get('subject')
         message = form.cleaned_data.get('message')
@@ -175,7 +174,8 @@ def send_message(request):
                 body=message,
                 from_email=sender.email,
                 to=email_addresses,
-                bcc=bcc_addresses
+                bcc=bcc_addresses,
+                cc=sender_addresses,
         )
         email.send()
 
