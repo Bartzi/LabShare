@@ -4,7 +4,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.core.exceptions import ObjectDoesNotExist
-from django.core.mail import send_mail
+from django.core.mail import EmailMessage
 from django.core.urlresolvers import reverse
 from django.http import HttpResponseRedirect, HttpResponseBadRequest, HttpResponse, HttpResponseForbidden, Http404
 from django.shortcuts import get_object_or_404
@@ -147,13 +147,17 @@ def send_message(request):
     form = MessageForm(request.POST or None)
     if form.is_valid():
         sender = request.user
+        sender_addresses = [address.email for address in sender.email_addresses.all()]
+        sender_addresses.append(sender.email)
 
+        bcc_addresses = []
         if form.cleaned_data.get('message_all_users'):
             if not request.user.is_staff:
                 return HttpResponseBadRequest()
-            users = User.objects.all()
-            email_addresses = [user.email for user in users]
-            email_addresses.extend([address.email for user in users for address in user.email_addresses.all()])
+            users = User.objects.exclude(id=sender.id)
+            bcc_addresses = [user.email for user in users]
+            bcc_addresses.extend([address.email for user in users for address in user.email_addresses.all()])
+            email_addresses = [sender.email]
         else:
             recipient = form.cleaned_data.get('recipient')
             if recipient is None:
@@ -161,20 +165,19 @@ def send_message(request):
                 return {"form": form}
             email_addresses = [address.email for address in recipient.email_addresses.all()]
             email_addresses.append(recipient.email)
-
-        sender_addresses = [address.email for address in sender.email_addresses.all()]
-        sender_addresses.append(sender.email)
-        email_addresses.extend(sender_addresses)
+            email_addresses.extend(sender_addresses)
 
         subject = form.cleaned_data.get('subject')
         message = form.cleaned_data.get('message')
 
-        send_mail(
-                subject,
-                message,
-                sender.email,
-                email_addresses,
+        email = EmailMessage(
+                subject="[Labshare] {}".format(subject),
+                body=message,
+                from_email=sender.email,
+                to=email_addresses,
+                bcc=bcc_addresses
         )
+        email.send()
 
         messages.success(request, "Message sent!")
         return HttpResponseRedirect(reverse("index"))
