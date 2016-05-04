@@ -88,7 +88,7 @@ DEFAULT_FROM_EMAIL = "admin@labshare.labshare"
 LANGUAGE_CODE = 'en-us'
 
 TIME_ZONE = 'CET'
-DATETIME_FORMAT = 'P d.n'
+DATETIME_FORMAT = 'P d.n.'
 
 USE_I18N = True
 
