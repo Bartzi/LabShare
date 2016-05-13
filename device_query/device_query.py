@@ -22,6 +22,11 @@ class DeviceQueryHandler(BaseHTTPRequestHandler):
                 "free": memory_usage.find("free").text,
             }
 
+            process_block = gpu.find("processes")
+            if process_block.text == "N/A":
+                current_gpu_data["in_use"] = "na"
+            else:
+                current_gpu_data["in_use"] = "yes" if len(list(process_block.iter("process_info"))) > 0 else "no"
             current_gpu_data["memory"] = memory
             gpu_data.append(current_gpu_data)
         return gpu_data
