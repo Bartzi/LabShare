@@ -17,6 +17,12 @@ class Command(BaseCommand):
                 gpus = json.loads(response)
                 for gpu_data in gpus:
                     gpu = GPU.objects.filter(device=device, uuid=gpu_data["uuid"])
+
+                    gpu_in_use = True if gpu_data.get("in_use", "na") == "yes" else False
+                    if gpu_data.get("in_use", "na") == "na":
+                        # assume that device is in use if more than 800 MiB of video ram are in use
+                        gpu_in_use = int(gpu_data["memory"]["used"].split()[0]) > 800
+
                     if not gpu.exists():
                         gpu = GPU(
                             device=device,
@@ -25,6 +31,7 @@ class Command(BaseCommand):
                             free_memory=gpu_data["memory"]["free"],
                             used_memory=gpu_data["memory"]["used"],
                             total_memory=gpu_data["memory"]["total"],
+                            in_use=gpu_in_use,
                         )
                     else:
                         gpu = gpu.get()
@@ -32,6 +39,7 @@ class Command(BaseCommand):
                         gpu.free_memory = memory_info["free"]
                         gpu.used_memory = memory_info["used"]
                         gpu.total_memory = memory_info["total"]
+                        gpu.in_use = gpu_in_use
                     gpu.save()
             except URLError:
                 pass
