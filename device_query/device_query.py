@@ -15,18 +15,18 @@ class DeviceQueryHandler(BaseHTTPRequestHandler):
 
     def __parse_processes(self, procs):
         processes = []
-        if procs.text == "N/A": 
+        if procs.text == "N/A":
             return "na", processes
 
         in_use = "no"
         for process in procs.iter("process_info"):
             if process.find('type').text.lower() == "c":
                 in_use = "yes"
-            processes.append({
-                "pid": process.find("pid").text,
-                "process_name": process.find("process_name").text,
-                "used_memory": process.find("used_memory").text,
-            }   )
+                processes.append({
+                    "pid": process.find("pid").text,
+                    "process_name": process.find("process_name").text,
+                    "used_memory": process.find("used_memory").text,
+                })
         return in_use, processes
 
     def parse_nvidia_xml(self, xml):
