@@ -51,6 +51,18 @@ class Reservation(models.Model):
     def __str__(self):
         return "{gpu} on {device}, {user}".format(device=self.gpu.device, gpu=self.gpu, user=self.user)
 
+class GPUProcess(models.Model):
+    gpu = models.ForeignKey(GPU, related_name="processes")
+    process = models.CharField(max_length=511)
+    pid = models.PositiveIntegerField()
+    memory_usage = models.CharField(max_length=100)
+
+    def __str__(self):
+        return "{process} running on {gpu} (using {memory})".format(
+            process = self.process,
+            gpu = self.gpu,
+            memory = self.memory_usage)
+
 
 class EmailAddress(models.Model):
     user = models.ForeignKey(User, related_name="email_addresses")
