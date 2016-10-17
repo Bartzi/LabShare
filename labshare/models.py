@@ -21,14 +21,10 @@ class GPU(models.Model):
     free_memory = models.CharField(max_length=100)
     used_memory = models.CharField(max_length=100)
     total_memory = models.CharField(max_length=100)
+    in_use = models.BooleanField(default=False)
 
     def __str__(self):
         return self.model_name
-
-    def in_use(self):
-        used_mem = int(self.used_memory.split()[0])
-        # device is in use if more than 800 MiB of video ram are in use
-        return used_mem > 800
 
     def last_update_too_long_ago(self):
         return self.last_updated < timezone.now() - timedelta(minutes = 30)
@@ -54,3 +50,11 @@ class Reservation(models.Model):
 
     def __str__(self):
         return "{gpu} on {device}, {user}".format(device=self.gpu.device, gpu=self.gpu, user=self.user)
+
+
+class EmailAddress(models.Model):
+    user = models.ForeignKey(User, related_name="email_addresses")
+    email = models.EmailField(max_length=255, unique=True)
+
+    def __str__(self):
+        return "{}: {}".format(self.user, self.email)

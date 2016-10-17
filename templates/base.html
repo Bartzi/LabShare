@@ -1,8 +1,8 @@
+{% load staticfiles icon %}
+{% load bootstrap3 %}
+
 <!DOCTYPE html>
 <html lang="en">
-
-{% load staticfiles icon %}
-
 <head>
 
     <meta charset="utf-8">
@@ -59,23 +59,26 @@
                         </li>
                         {% if user.is_authenticated %}
                             <li>
+                                <a href="{% url "send_message" %}">{% icon envelope %} Message a User</a>
+                            </li>
+                            <li>
                                 <a href="{% url "reserve" %}">{% icon pencil %} Reserve</a>
                             </li>
                             <li class="navbar-text">Logged in as: {{ user.username }}</li>
                             <li class="dropdown">
-                                <a class="dropdown-toggle" data-toggle="dropdown" href="#">
-                                    {% icon user %}  {% icon menu-down %}
+                                <a class="dropdown-toggle" data-toggle="dropdown" href="#" role="button" aria-haspopup="true" aria-expanded="false">
+                                    {% icon user %} {% icon menu-down %}
                                 </a>
                                 <ul class="dropdown-menu dropdown-user">
+                                    {% if user.is_staff %}
                                     <li>
-                                        {% if user.is_staff %}
-                                            <a href="{% url "admin:index" %}">{% icon sunglasses %} Admin Area</a>
-                                            <div class="divider"></div>
-                                        {% endif %}
-                                        <a href="{% url "password_change" %}">{% icon wrench %} Change Password</a>
-                                        <div class="divider"></div>
-                                        <a href="{% url "logout" %}?next={% url "index" %}">{% icon log-out %} Logout</a>
+                                        <a href="{% url "admin:index" %}">{% icon sunglasses %} Admin Area</a>
                                     </li>
+                                    <li role="separator" class="divider"></li>
+                                    {% endif %}
+                                    <li><a href="{% url "password_change" %}">{% icon wrench %} Change Password</a></li>
+                                    <li role="separator" class="divider"></li>
+                                    <li><a href="{% url "logout" %}?next={% url "index" %}">{% icon log-out %} Logout</a></li>
                                 </ul>
                             </li>
                         {% else %}
@@ -88,6 +91,7 @@
     </div>
 
     <div class="container" id="content-wrapper">
+        {% bootstrap_messages %}
         {% block content %}{% endblock %}
     </div>
 

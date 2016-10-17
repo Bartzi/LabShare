@@ -25,7 +25,9 @@ INSTALLED_APPS = (
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'django.contrib.sites',
     'labshare',
+    'bootstrap3',
 )
 
 MIDDLEWARE_CLASSES = (
@@ -46,7 +48,6 @@ TEMPLATES = [
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
         'DIRS': [os.path.join(BASE_DIR, 'templates')]
         ,
-        'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
                 'django.template.context_processors.debug',
@@ -54,6 +55,10 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
             ],
+            'loaders': [
+                'django.template.loaders.eggs.Loader',
+                'django.template.loaders.filesystem.Loader',
+            ]
         },
     },
 ]
@@ -83,7 +88,7 @@ DEFAULT_FROM_EMAIL = "admin@labshare.labshare"
 LANGUAGE_CODE = 'en-us'
 
 TIME_ZONE = 'CET'
-DATETIME_FORMAT = 'P d.n'
+DATETIME_FORMAT = 'P d.n.'
 
 USE_I18N = True
 
@@ -93,6 +98,7 @@ USE_TZ = True
 
 LOGIN_REDIRECT_URL = "/"
 
+SITE_ID = 1
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/1.8/howto/static-files/

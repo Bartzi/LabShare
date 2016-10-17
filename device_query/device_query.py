@@ -15,27 +15,32 @@ class DeviceQueryHandler(BaseHTTPRequestHandler):
 
     def __parse_processes(self, procs):
         processes = []
-        if procs.text == "N/A": return processes
+        if procs.text == "N/A": 
+            return "na", processes
 
+        in_use = "no"
         for process in procs.iter("process_info"):
+            if process.find('type').text.lower() == "c":
+                in_use = "yes"
             processes.append({
                 "pid": process.find("pid").text,
                 "process_name": process.find("process_name").text,
                 "used_memory": process.find("used_memory").text,
             }   )
-        return processes
+        return in_use, processes
 
     def parse_nvidia_xml(self, xml):
         gpu_data = []
         root = ET.fromstring(xml)
         for gpu in root.iter('gpu'):
+            in_use, processes = self.__parse_processes(gpu.find("processes"))
             gpu_data.append({
                 "name": gpu.find("product_name").text,
                 "uuid": gpu.find("uuid").text,
                 "memory": self.__parse_memory(gpu.find("fb_memory_usage")),
-                "processes": self.__parse_processes(gpu.find("processes")),
+                "processes": processes,
+                "in_use": in_use,
             })
-
         return gpu_data
 
     def do_GET(self):

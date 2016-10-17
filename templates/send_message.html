@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+
+{% load bootstrap3 %}
+
+{% block content %}
+    <h1 class="page-header">Send Message</h1>
+
+    <form action="{% url 'send_message' %}" method="POST">
+        {% csrf_token %}
+        {% if user.is_staff %}
+            {% bootstrap_field form.message_all_users %}
+        {% endif %}
+        {% bootstrap_field form.recipient %}
+        {% bootstrap_field form.subject %}
+        {% bootstrap_field form.message %}
+        {% buttons %}
+            <button type="submit" class="btn btn-primary">
+				{% bootstrap_icon "send" %} Send
+			</button>
+        {% endbuttons %}
+    </form>
+{% endblock %}

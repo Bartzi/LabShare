@@ -1,4 +1,5 @@
-django >= 1.8.5, < 1.9
+django >= 1.9.6, < 2.0
 django-webtest >= 1.7.8
-model_mommy >= 1.2.5.1
+django-bootstrap3 >= 5.4.0
+model_mommy >= 1.2.6
 python-coveralls >= 2.5.0
