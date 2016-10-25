@@ -1,0 +1,13 @@
+[Unit]
+Description=Job that runs the device query script for LabShare
+
+[Service]
+Restart=on-failure
+User=nobody
+Group=nogroup
+WorkingDirectory=/usr/local/device_query
+ExecStart=/usr/bin/python3 device_query.py
+
+[Install]
+WantedBy=multi-user.target
+
