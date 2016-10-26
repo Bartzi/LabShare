@@ -4,9 +4,15 @@ from django.contrib.auth import admin as upstream
 from django.contrib.auth.forms import UserCreationForm, UserChangeForm
 from django.contrib.auth.models import User
 from django.utils.translation import ugettext_lazy as _
+from guardian.admin import GuardedModelAdmin
+
 from .models import Device, GPU, Reservation, EmailAddress
 
-admin.site.register(Device)
+
+class DeviceAdmin(GuardedModelAdmin):
+    pass
+
+admin.site.register(Device, DeviceAdmin)
 admin.site.register(GPU)
 admin.site.register(Reservation)
 admin.site.register(EmailAddress)
