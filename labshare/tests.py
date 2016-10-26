@@ -6,6 +6,7 @@ from django.contrib.auth.models import User, Group
 from django.core.urlresolvers import reverse
 from django_webtest import WebTest
 from guardian.shortcuts import assign_perm
+from guardian.utils import get_anonymous_user
 from model_mommy import mommy
 
 from labshare.models import Device, GPU, Reservation
@@ -591,7 +592,7 @@ class LabSharePermissionTests(WebTest):
         for device in self.devices:
             self.assertIn(device.name, response.body.decode('utf-8'))
 
-        response = self.app.get(reverse("index"))
+        response = self.app.get(reverse("index"), user=get_anonymous_user())
         for device in self.devices:
             self.assertNotIn(device.name, response.body.decode('utf-8'))
 
@@ -606,7 +607,7 @@ class LabSharePermissionTests(WebTest):
         for device in self.devices:
             self.assertIn(device.name, response.body.decode('utf-8'))
 
-        response = self.app.get(reverse("reserve"))
+        response = self.app.get(reverse("reserve"), user=get_anonymous_user())
         for device in self.devices:
             self.assertNotIn(device.name, response.body.decode('utf-8'))
 
@@ -615,14 +616,16 @@ class LabSharePermissionTests(WebTest):
 
         form = response.form
         form['device'] = self.devices[0].name
-        form['next-available-spot'] = True
+        form['gpu'].force_value([self.devices[0].gpus.first().uuid])
+        form['next-available-spot'] = "true"
 
-        response = form.submit()
+        response = form.submit(user=self.user)
         self.assertNotIn("Select a valid choice.", response.body.decode('utf-8'))
 
         form['device'].force_value([self.devices[-1].name])
-        form['next-available-spot'] = True
-        response = form.submit()
+        form['gpu'].force_value([self.devices[-1].gpus.first().uuid])
+        form['next-available-spot'] = "true"
+        response = form.submit(user=self.user)
         self.assertIn("Select a valid choice.", response.body.decode('utf-8'))
 
     def test_reserve_given_gpu(self):
