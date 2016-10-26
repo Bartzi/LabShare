@@ -3,7 +3,7 @@ import json
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
-from django.core.exceptions import ObjectDoesNotExist
+from django.core.exceptions import ObjectDoesNotExist, PermissionDenied
 from django.core.mail import EmailMessage
 from django.core.urlresolvers import reverse
 from django.http import HttpResponseRedirect, HttpResponseBadRequest, HttpResponse, HttpResponseForbidden, Http404
@@ -17,17 +17,21 @@ from labshare.decorators import render_to
 
 @render_to("overview.html")
 def index(request):
-    devices = Device.objects.all()
+    devices = list(filter(lambda device: device.can_be_used_by(request.user), Device.objects.all()))
     return {"devices": devices}
 
 
 @login_required
 @render_to("reserve.html")
 def reserve(request):
-    form = DeviceSelectForm(request.POST or None)
+    accessible_devices = filter(lambda device: device.can_be_used_by(request.user), Device.objects.all())
+
+    form = DeviceSelectForm(request.POST or None, devices=accessible_devices)
     if form.is_valid():
         if json.loads(form.data["next-available-spot"]):
             device = Device.objects.get(name=form.data["device"])
+            if not device.can_be_used_by(request.user):
+                raise PermissionDenied
             # first check whether a gpu is already available on that given machine
             for gpu in device.gpus.all():
                 if gpu.reservations.count() is 0:
@@ -43,6 +47,8 @@ def reserve(request):
                 send_reservation_mail_for(request, gpu)
         else:
             gpu = GPU.objects.get(uuid=form.data["gpu"])
+            if not gpu.device.can_be_used_by(request.user):
+                raise PermissionDenied
             reservation = Reservation(gpu=gpu, user=request.user)
             reservation.save()
 
@@ -63,6 +69,9 @@ def gpus(request):
         return HttpResponseBadRequest()
 
     device = Device.objects.get(name=device_name)
+    if not device.can_be_used_by(request.user):
+        raise PermissionDenied
+
     return_data = {
         'gpus': [{
             "id": gpu.uuid,
@@ -81,6 +90,10 @@ def gpu_info(request):
         return HttpResponseBadRequest()
 
     gpu = GPU.objects.get(uuid=uuid)
+
+    if not gpu.device.can_be_used_by(request.user):
+        raise PermissionDenied
+
     current_reservation = gpu.current_reservation()
 
     return_data = {
@@ -96,6 +109,9 @@ def gpu_info(request):
 @login_required
 def gpu_done(request, gpu_id):
     gpu = get_object_or_404(GPU, pk=gpu_id)
+
+    if not gpu.device.can_be_used_by(request.user):
+        raise PermissionDenied
 
     current_reservation = gpu.current_reservation()
 
@@ -132,6 +148,10 @@ def gpu_done(request, gpu_id):
 @login_required
 def gpu_cancel(request, gpu_id):
     gpu = get_object_or_404(GPU, pk=gpu_id)
+
+    if not gpu.device.can_be_used_by(request.user):
+        raise PermissionDenied
+
     try:
         reservation = gpu.reservations.filter(user=request.user).latest("time_reserved")
         reservation.delete()

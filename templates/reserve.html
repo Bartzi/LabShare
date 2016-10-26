@@ -9,6 +9,15 @@
             {% csrf_token %}
             <input type="hidden" name="next-available-spot" value="false">
             <div class="form-group">
+                {%  if form.device.errors %}
+                    <div class="alert alert-danger" role="alert">
+                        <ul class="list-unstyled">
+                            {% for error in form.device.errors %}
+                                <li>{{ error }}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                {% endif %}
                 <label for="selectDevice" class="col-sm-2 control-label">Device</label>
                 <div class="col-sm-10">
                     <select class="form-control" id="selectDevice" name="device">
@@ -19,6 +28,15 @@
                 </div>
             </div>
             <div class="form-group">
+                {%  if form.gpu.errors %}
+                    <div class="alert alert-danger" role="alert">
+                        <ul class="list-unstyled">
+                            {% for error in form.gpu.errors %}
+                                <li>{{ error }}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                {% endif %}
                 <label for="selectGPU" class="col-sm-2 control-label">GPU</label>
                 <div class="col-sm-10">
                     <select class="form-control" id="selectGPU" name="gpu" disabled>

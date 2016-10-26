@@ -1,4 +1,5 @@
 from django.contrib.auth.models import User
+from django.contrib.contenttypes.models import ContentType
 from django.db import models
 from django.utils import timezone
 
@@ -9,8 +10,18 @@ class Device(models.Model):
     name = models.CharField(max_length=255)
     ip_address = models.GenericIPAddressField()
 
+    class Meta:
+        permissions = (
+            ('use_device', 'User/Group is not allowed to use that device'),
+        )
+
     def __str__(self):
         return self.name
+
+    def can_be_used_by(self, user):
+        content_type = ContentType.objects.get_for_model(self)
+        permission_name = "{app}.use_{model}".format(app=content_type.app_label, model=content_type.model)
+        return user.has_perm(permission_name, self) or user.has_perm(permission_name)
 
 
 class GPU(models.Model):

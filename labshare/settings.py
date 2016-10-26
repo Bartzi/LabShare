@@ -28,6 +28,7 @@ INSTALLED_APPS = (
     'django.contrib.sites',
     'labshare',
     'bootstrap3',
+    'guardian',
 )
 
 MIDDLEWARE_CLASSES = (
@@ -76,6 +77,11 @@ DATABASES = {
         'NAME': os.path.join(BASE_DIR, 'db.sqlite3'),
     }
 }
+
+AUTHENTICATION_BACKENDS = (
+    'django.contrib.auth.backends.ModelBackend', # this is default
+    'guardian.backends.ObjectPermissionBackend',
+)
 
 EMAIL_BACKEND = 'labshare.backends.mail.open_smtp.OpenSMTPBackend'
 EMAIL_HOST = "localhost"
