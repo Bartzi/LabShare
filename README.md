@@ -16,3 +16,11 @@ Django Tool that helps everyone to get their fair share of GPU time.
 3. create a new `Device` in the django admin for every device you want to monitor
 4. after you've created the devices and deployed and started the `device_query` scripts you should run `python manage.py update` which will fill your database with information on the GPUs that each device has.
 5. If you want to have updates regularly you should create a cron job that runs the update job every now and then.
+
+## Configuration
+
+In order to make it possible for users to see the devices and their gpus you need to give each user the permission to do so!
+You can do this in one of the following ways:
+
+1. Add user to the default Staff group. This group already has a global permission that allows each user in that group to use all GPUs in LabShare. This allows you to easily provide the necessary permission to each user.
+2. For finegrained control you can control who can use which device, by adding the `use_device` permission to each user or a group in the permission admin of each device.
