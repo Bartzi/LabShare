@@ -26,7 +26,7 @@
                 {% endif %}
             {% endif %}
 
-            <form method="post" role="form" action="{% url "django.contrib.auth.views.login" %}">
+            <form method="post" role="form" action="{% url "login" %}">
                 {% csrf_token %}
                 <fieldset>
                     <div class="form-group">
