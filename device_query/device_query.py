@@ -6,32 +6,41 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 
 class DeviceQueryHandler(BaseHTTPRequestHandler):
 
+    def __parse_memory(self, memory_usage):
+        return {
+            "total": memory_usage.find("total").text,
+            "used": memory_usage.find("used").text,
+            "free": memory_usage.find("free").text,
+        }
+
+    def __parse_processes(self, procs):
+        processes = []
+        if procs.text == "N/A":
+            return "na", processes
+
+        in_use = "no"
+        for process in procs.iter("process_info"):
+            if process.find('type').text.lower() == "c":
+                in_use = "yes"
+                processes.append({
+                    "pid": process.find("pid").text,
+                    "process_name": process.find("process_name").text,
+                    "used_memory": process.find("used_memory").text,
+                })
+        return in_use, processes
+
     def parse_nvidia_xml(self, xml):
         gpu_data = []
         root = ET.fromstring(xml)
         for gpu in root.iter('gpu'):
-            current_gpu_data = {
+            in_use, processes = self.__parse_processes(gpu.find("processes"))
+            gpu_data.append({
                 "name": gpu.find("product_name").text,
                 "uuid": gpu.find("uuid").text,
-            }
-
-            memory_usage = gpu.find("fb_memory_usage")
-            memory = {
-                "total": memory_usage.find("total").text,
-                "used": memory_usage.find("used").text,
-                "free": memory_usage.find("free").text,
-            }
-
-            process_block = gpu.find("processes")
-            if process_block.text == "N/A":
-                current_gpu_data["in_use"] = "na"
-            else:
-                current_gpu_data["in_use"] = "no"
-                for process in process_block.iter("process_info"):
-                    if process.find('type').text.lower() == "c":
-                        current_gpu_data["in_use"] = "yes"
-            current_gpu_data["memory"] = memory
-            gpu_data.append(current_gpu_data)
+                "memory": self.__parse_memory(gpu.find("fb_memory_usage")),
+                "processes": processes,
+                "in_use": in_use,
+            })
         return gpu_data
 
     def do_GET(self):
@@ -43,7 +52,7 @@ class DeviceQueryHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(bytes(json.dumps(gpu_data, indent=4), 'utf-8'))
         except Exception as e:
-            self.send_error(500)
+            self.send_error(500, explain = str(e))
 
 
 if __name__ == "__main__":

@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% load staticfiles %}
-{% load reservations %}
+{% load reservations processes%}
 {% load icon %}
 
 {% block extra_css %}
@@ -13,9 +13,13 @@
 {% endblock %}
 
 {% block content %}
+  {% for device in devices %}
+    {% for gpu in device.gpus.all %}
+      {% render_process_list gpu.id gpu.processes.all %}
+    {% endfor %}
+  {% endfor %}
+
     <h1 class="page-header">Overview</h1>
-
-
     <div class="col-lg-12">
         <div class="panel panel-default">
             <div class="panel-body">
@@ -25,6 +29,7 @@
                             <th>Device</th>
                             <th>GPU</th>
                             <th>Memory Usage (Free/Used/Total)</th>
+                            <th>Processes</th>
                             <th>Last Update</th>
                             <th>Current</th>
                             <th>Next</th>
@@ -39,6 +44,13 @@
                                     <td>{{ device.name }}</td>
                                     <td>{{ gpu.model_name }}</td>
                                     <td>{{ gpu.free_memory }} / {{ gpu.used_memory }} / {{ gpu.total_memory }}</td>
+                                    <td>
+                                      {% if gpu.processes.count %}
+                                        <button type="button" class="btn btn-sm btn-primary" data-toggle="modal" data-target="#gpu-proc-list-{{ gpu.id }}">{{ gpu.processes.count }} Processes</button>
+                                      {% else %}
+                                        <i>No running processes.</i>
+                                      {% endif %}
+                                    </td>
                                     <td>{{ gpu.last_updated }}{% if gpu.last_update_too_long_ago %} {% icon exclamation-sign %} {% endif %}</td>
                                     <td>{{ gpu|current_reservation }}</td>
                                     <td>{{ gpu|next_reservation }}</td>
@@ -76,17 +88,17 @@
     <script src="{% static "DataTables-1.10.9/js/dataTables.bootstrap.min.js" %}"></script>
     <script src="{% static "Responsive-1.0.7/js/dataTables.responsive.min.js" %}"></script>
 
-     <script>
-     function refreshPage() {
-         window.location.reload(true);
-         setTimeout(refreshPage, 300000);
-     }
+    <script>
+      function refreshPage() {
+        window.location.reload(true);
+        setTimeout(refreshPage, 300000);
+      }
 
-     $(document).ready(function() {
+      $(document).ready(function() {
          $('#overview-table').DataTable({
              responsive: true,
              "columnDefs": [
-                 {"orderable": false, "targets": [6, 7]}
+                {"orderable": false, "targets": [6, 7]}
              ]
          });
 
@@ -107,5 +119,8 @@
          setTimeout(refreshPage, 300000);
      });
 
+    $(function () {
+      $('[data-toggle="popover"]').popover({ "html": true })
+    })
     </script>
 {% endblock %}
