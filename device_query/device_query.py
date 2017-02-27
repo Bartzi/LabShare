@@ -1,5 +1,7 @@
 import subprocess
 import xml.etree.ElementTree as ET
+import os
+import pwd
 import json
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
@@ -9,6 +11,7 @@ class DeviceQueryHandler(BaseHTTPRequestHandler):
     def parse_nvidia_xml(self, xml):
         gpu_data = []
         root = ET.fromstring(xml)
+
         for gpu in root.iter('gpu'):
             current_gpu_data = {
                 "name": gpu.find("product_name").text,
@@ -27,12 +30,26 @@ class DeviceQueryHandler(BaseHTTPRequestHandler):
                 current_gpu_data["in_use"] = "na"
             else:
                 current_gpu_data["in_use"] = "no"
+                current_gpu_data["processes"] = []
                 for process in process_block.iter("process_info"):
                     if process.find('type').text.lower() == "c":
                         current_gpu_data["in_use"] = "yes"
+                        pid = process.find('pid').text
+                        process_info = {
+                            "pid": pid,
+                            "username": self.owner(pid),
+                        }
+                        current_gpu_data["processes"].append(process_info)
             current_gpu_data["memory"] = memory
             gpu_data.append(current_gpu_data)
         return gpu_data
+
+    def owner(self, pid):
+        UID = 1
+        for line in open('/proc/{}/status'.format(pid)):
+            if line.startswith('Uid:'):
+                uid = int(line.split()[UID])
+                return pwd.getpwuid(uid).pw_name
 
     def do_GET(self):
         try:
