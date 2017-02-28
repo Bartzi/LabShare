@@ -1,3 +1,4 @@
+import random
 from datetime import timedelta
 from unittest.mock import Mock
 
@@ -9,7 +10,7 @@ from guardian.shortcuts import assign_perm
 from guardian.utils import get_anonymous_user
 from model_mommy import mommy
 
-from labshare.models import Device, GPU, Reservation
+from labshare.models import Device, GPU, Reservation, GPUProcess
 
 from labshare.templatetags.icon import icon
 from labshare.templatetags.reservations import queue_position
@@ -552,6 +553,61 @@ class TestMessages(WebTest):
         response = form.submit()
         self.assertEqual(response.status_code, 200)
         self.assertIn("Please select a recipient", response.body.decode('utf-8'))
+
+
+class GPUProcessTests(WebTest):
+
+    csrf_checks = False
+
+    def setUp(self):
+        self.user = mommy.make(User, is_superuser=True)
+
+        devices = mommy.make(Device, _quantity=3)
+        for idx, device in enumerate(devices):
+            gpus = mommy.make(GPU, _quantity=2, device=device)
+            for gpu in gpus:
+                if idx == 1:
+                    mommy.make(GPUProcess, gpu=gpu, _quantity=2)
+                elif idx == 2:
+                    mommy.make(GPUProcess, gpu=gpu)
+
+    def test_process_button_display(self):
+        response = self.app.get(reverse("index"), user=self.user)
+        self.assertEqual(response.status_code, 200)
+
+        response_body = response.body.decode('utf-8')
+        self.assertEqual(response_body.count("disabled"), 2)
+        self.assertEqual(response_body.count("1 Process"), 2)
+        self.assertEqual(response_body.count("2 Processes"), 2)
+
+    def test_process_overlay(self):
+        response = self.app.get(reverse("index"), user=self.user)
+        self.assertEqual(response.status_code, 200)
+
+        response_body = response.body.decode('utf-8')
+        for i in range(1, GPUProcess.objects.count() + 1):
+            self.assertIn('gpu-proc-list-{}'.format(i), response_body)
+
+    def test_process_info_in_response(self):
+        response = self.app.get(reverse("index"), user=self.user)
+        self.assertEqual(response.status_code, 200)
+
+        response_body = response.body.decode('utf-8')
+        for process in GPUProcess.objects.all():
+            self.assertIn("PID: {}".format(process.pid), response_body)
+            self.assertIn(process.name, response_body)
+            self.assertIn("User: {}".format(process.username), response_body)
+            self.assertIn("Memory Usage: {}".format(process.memory_usage), response_body)
+
+    def test_gpu_process_string(self):
+        for process in GPUProcess.objects.all():
+            process_info = "{process} (by {username}) running on {gpu} (using {memory})".format(
+                process=process.name,
+                username=process.username,
+                gpu=process.gpu,
+                memory=process.memory_usage,
+            )
+            self.assertEqual(str(process), process_info)
 
 
 class LabSharePermissionTests(WebTest):
