@@ -10,10 +10,11 @@ from guardian.shortcuts import assign_perm
 from guardian.utils import get_anonymous_user
 from model_mommy import mommy
 
-from labshare.models import Device, GPU, Reservation, GPUProcess
+from labshare.models import Device, GPU, Reservation, GPUProcess, EmailAddress
 
 from labshare.templatetags.icon import icon
 from labshare.templatetags.reservations import queue_position
+from labshare.utils import get_devices
 
 
 class TestLabshare(WebTest):
@@ -165,6 +166,11 @@ class TestLabshare(WebTest):
         self.assertEqual(response.status_code, 302)
         self.assertEqual(Reservation.objects.count(), 2)
         self.assertEqual(Reservation.objects.filter(user_reserved_next_available_spot=True).count(), 1)
+
+    def test_get_devices(self):
+        device_info = get_devices()
+        for device, device_info in zip(Device.objects.all(), device_info):
+            self.assertEqual((device.name, device.name), device_info)
 
     def test_get_gpu_info_no_user(self):
         response = self.app.get(
@@ -380,6 +386,11 @@ class TestLabshare(WebTest):
         self.assertEqual(Reservation.objects.count(), 2)
         self.assertEqual(gpu.last_reservation().user, other)
         self.assertEqual(gpu.current_reservation().user, self.user)
+        self.app.get(reverse("cancel_gpu", args=[gpu.id]), user=other)
+        self.assertEqual(Reservation.objects.count(), 1)
+        self.app.get(reverse("cancel_gpu", args=[gpu.id]), user=self.user)
+        self.assertEqual(Reservation.objects.count(), 0)
+        self.assertEqual(gpu.last_reservation(), None)
 
     def test_cancel_gpu_reservation_wrong_user(self):
         gpu = self.devices[0].gpus.first()
@@ -742,3 +753,14 @@ class LabSharePermissionTests(WebTest):
         response = self.app.get(reverse("cancel_gpu", args=[self.devices[-1].gpus.first().id]), user=self.staff_user)
         self.assertRedirects(response, reverse("index"))
 
+
+class EmailAddressTests(WebTest):
+
+    def setUp(self):
+        user = mommy.make(User)
+        mommy.make(EmailAddress, _quantity=5, user=user)
+
+    def test_stringify_email_address(self):
+        for address in EmailAddress.objects.all():
+            address_info = "{}: {}".format(address.user, address.email)
+            self.assertEqual(str(address), address_info)
