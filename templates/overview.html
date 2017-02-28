@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% load staticfiles %}
-{% load reservations %}
+{% load reservations processes %}
 {% load icon %}
 
 {% block extra_css %}
@@ -13,6 +13,11 @@
 {% endblock %}
 
 {% block content %}
+    {% for device in devices %}
+        {% for gpu in device.gpus.all %}
+            {% render_process_list gpu.id gpu.processes.all %}
+        {% endfor %}
+    {% endfor %}
     <h1 class="page-header">Overview</h1>
 
 
@@ -24,7 +29,8 @@
                         <tr>
                             <th>Device</th>
                             <th>GPU</th>
-                            <th>Memory Usage (Free/Used/Total)</th>
+                            <th>Memory Usage</th>
+                            <th>Processes</th>
                             <th>Last Update</th>
                             <th>Current</th>
                             <th>Next</th>
@@ -38,7 +44,14 @@
                                 <tr {% if gpu.in_use %}class="warning"{% endif %}>
                                     <td>{{ device.name }}</td>
                                     <td>{{ gpu.model_name }}</td>
-                                    <td>{{ gpu.free_memory }} / {{ gpu.used_memory }} / {{ gpu.total_memory }}</td>
+                                    <td>{{ gpu.used_memory }} / {{ gpu.total_memory }}</td>
+                                    <td>
+                                        {% with count=gpu.processes.count %}
+                                            <button class="btn btn-xs btn-info" {% if count == 0 %}disabled{% endif %} data-toggle="modal" data-target="#gpu-proc-list-{{ gpu.id }}">
+                                                {{ count }} Process{{ count|pluralize:"es" }}
+                                            </button>
+                                        {% endwith %}
+                                    </td>
                                     <td>{{ gpu.last_updated }}{% if gpu.last_update_too_long_ago %} {% icon exclamation-sign %} {% endif %}</td>
                                     <td>{{ gpu|current_reservation }}</td>
                                     <td>{{ gpu|next_reservation }}</td>
@@ -86,7 +99,7 @@
          $('#overview-table').DataTable({
              responsive: true,
              "columnDefs": [
-                 {"orderable": false, "targets": [6, 7]}
+                 {"orderable": false, "targets": [3, 7, 8]}
              ]
          });
 

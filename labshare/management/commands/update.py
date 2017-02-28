@@ -1,6 +1,6 @@
 from urllib.error import URLError
 from django.core.management import BaseCommand
-from labshare.models import Device, GPU
+from labshare.models import Device, GPU, GPUProcess
 
 import urllib.request
 import json
@@ -28,7 +28,6 @@ class Command(BaseCommand):
                             device=device,
                             model_name=gpu_data["name"],
                             uuid=gpu_data["uuid"],
-                            free_memory=gpu_data["memory"]["free"],
                             used_memory=gpu_data["memory"]["used"],
                             total_memory=gpu_data["memory"]["total"],
                             in_use=gpu_in_use,
@@ -36,11 +35,22 @@ class Command(BaseCommand):
                     else:
                         gpu = gpu.get()
                         memory_info = gpu_data["memory"]
-                        gpu.free_memory = memory_info["free"]
                         gpu.used_memory = memory_info["used"]
                         gpu.total_memory = memory_info["total"]
                         gpu.in_use = gpu_in_use
                     gpu.save()
+
+                    gpu.processes.all().delete()
+                    if gpu_in_use:
+                        # save processes if this is supported by the GPU
+                        for process in gpu_data.get('processes', []):
+                            GPUProcess(
+                                gpu=gpu,
+                                name=process.get("name", "Unknown"),
+                                pid=int(process.get("pid", "0")),
+                                memory_usage=process.get("used_memory", "Unknown"),
+                                username=process.get("username", "Unknown"),
+                            ).save()
             except URLError:
                 pass
             except Exception as e:

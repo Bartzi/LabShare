@@ -1,3 +1,4 @@
+import random
 from datetime import timedelta
 from unittest.mock import Mock
 
@@ -9,10 +10,11 @@ from guardian.shortcuts import assign_perm
 from guardian.utils import get_anonymous_user
 from model_mommy import mommy
 
-from labshare.models import Device, GPU, Reservation
+from labshare.models import Device, GPU, Reservation, GPUProcess, EmailAddress
 
 from labshare.templatetags.icon import icon
 from labshare.templatetags.reservations import queue_position
+from labshare.utils import get_devices
 
 
 class TestLabshare(WebTest):
@@ -22,9 +24,9 @@ class TestLabshare(WebTest):
     def setUp(self):
         self.user = mommy.make(User)
         self.devices = mommy.make(Device, _quantity=3)
-        mommy.make(GPU, device=self.devices[0], _quantity=2, used_memory="12 Mib", free_memory="100 Mib", total_memory="112 Mib")
-        mommy.make(GPU, device=self.devices[1], used_memory="12 Mib", free_memory="100 Mib", total_memory="112 Mib")
-        mommy.make(GPU, device=self.devices[-1], used_memory="12 Mib", free_memory="100 Mib", total_memory="112 Mib")
+        mommy.make(GPU, device=self.devices[0], _quantity=2, used_memory="12 Mib", total_memory="112 Mib")
+        mommy.make(GPU, device=self.devices[1], used_memory="12 Mib", total_memory="112 Mib")
+        mommy.make(GPU, device=self.devices[-1], used_memory="12 Mib", total_memory="112 Mib")
 
         self.group = mommy.make(Group)
         self.user.groups.add(self.group)
@@ -165,6 +167,11 @@ class TestLabshare(WebTest):
         self.assertEqual(Reservation.objects.count(), 2)
         self.assertEqual(Reservation.objects.filter(user_reserved_next_available_spot=True).count(), 1)
 
+    def test_get_devices(self):
+        device_info = get_devices()
+        for device, device_info in zip(Device.objects.all(), device_info):
+            self.assertEqual((device.name, device.name), device_info)
+
     def test_get_gpu_info_no_user(self):
         response = self.app.get(
             "{url}?device_name={device_name}".format(url=reverse("gpus_for_device"), device_name=self.devices[0].name),
@@ -258,7 +265,6 @@ class TestLabshare(WebTest):
         )
         self.assertEqual(response.status_code, 200)
 
-        self.assertIn(gpu.free_memory, response.body.decode('utf-8'))
         self.assertIn(gpu.used_memory, response.body.decode('utf-8'))
         self.assertIn(gpu.total_memory, response.body.decode('utf-8'))
         self.assertIn("No current user", response.body.decode('utf-8'))
@@ -274,7 +280,6 @@ class TestLabshare(WebTest):
         )
         self.assertEqual(response.status_code, 200)
 
-        self.assertIn(gpu.free_memory, response.body.decode('utf-8'))
         self.assertIn(gpu.used_memory, response.body.decode('utf-8'))
         self.assertIn(gpu.total_memory, response.body.decode('utf-8'))
         self.assertIn(self.user.username, response.body.decode('utf-8'))
@@ -381,6 +386,11 @@ class TestLabshare(WebTest):
         self.assertEqual(Reservation.objects.count(), 2)
         self.assertEqual(gpu.last_reservation().user, other)
         self.assertEqual(gpu.current_reservation().user, self.user)
+        self.app.get(reverse("cancel_gpu", args=[gpu.id]), user=other)
+        self.assertEqual(Reservation.objects.count(), 1)
+        self.app.get(reverse("cancel_gpu", args=[gpu.id]), user=self.user)
+        self.assertEqual(Reservation.objects.count(), 0)
+        self.assertEqual(gpu.last_reservation(), None)
 
     def test_cancel_gpu_reservation_wrong_user(self):
         gpu = self.devices[0].gpus.first()
@@ -474,9 +484,9 @@ class TestMessages(WebTest):
     def setUp(self):
         self.user = mommy.make(User, is_superuser=True, is_staff=True)
         self.devices = mommy.make(Device, _quantity=3)
-        mommy.make(GPU, device=self.devices[0], _quantity=2, used_memory="12 Mib", free_memory="100 Mib", total_memory="112 Mib")
-        mommy.make(GPU, device=self.devices[1], used_memory="12 Mib", free_memory="100 Mib", total_memory="112 Mib")
-        mommy.make(GPU, device=self.devices[-1], used_memory="12 Mib", free_memory="100 Mib", total_memory="112 Mib")
+        mommy.make(GPU, device=self.devices[0], _quantity=2, used_memory="12 Mib", total_memory="112 Mib")
+        mommy.make(GPU, device=self.devices[1], used_memory="12 Mib", total_memory="112 Mib")
+        mommy.make(GPU, device=self.devices[-1], used_memory="12 Mib", total_memory="112 Mib")
 
         self.group = mommy.make(Group)
         for device in self.devices:
@@ -556,6 +566,61 @@ class TestMessages(WebTest):
         self.assertIn("Please select a recipient", response.body.decode('utf-8'))
 
 
+class GPUProcessTests(WebTest):
+
+    csrf_checks = False
+
+    def setUp(self):
+        self.user = mommy.make(User, is_superuser=True)
+
+        devices = mommy.make(Device, _quantity=3)
+        for idx, device in enumerate(devices):
+            gpus = mommy.make(GPU, _quantity=2, device=device)
+            for gpu in gpus:
+                if idx == 1:
+                    mommy.make(GPUProcess, gpu=gpu, _quantity=2)
+                elif idx == 2:
+                    mommy.make(GPUProcess, gpu=gpu)
+
+    def test_process_button_display(self):
+        response = self.app.get(reverse("index"), user=self.user)
+        self.assertEqual(response.status_code, 200)
+
+        response_body = response.body.decode('utf-8')
+        self.assertEqual(response_body.count("disabled"), 2)
+        self.assertEqual(response_body.count("1 Process"), 2)
+        self.assertEqual(response_body.count("2 Processes"), 2)
+
+    def test_process_overlay(self):
+        response = self.app.get(reverse("index"), user=self.user)
+        self.assertEqual(response.status_code, 200)
+
+        response_body = response.body.decode('utf-8')
+        for i in range(1, GPUProcess.objects.count() + 1):
+            self.assertIn('gpu-proc-list-{}'.format(i), response_body)
+
+    def test_process_info_in_response(self):
+        response = self.app.get(reverse("index"), user=self.user)
+        self.assertEqual(response.status_code, 200)
+
+        response_body = response.body.decode('utf-8')
+        for process in GPUProcess.objects.all():
+            self.assertIn("PID: {}".format(process.pid), response_body)
+            self.assertIn(process.name, response_body)
+            self.assertIn("User: {}".format(process.username), response_body)
+            self.assertIn("Memory Usage: {}".format(process.memory_usage), response_body)
+
+    def test_gpu_process_string(self):
+        for process in GPUProcess.objects.all():
+            process_info = "{process} (by {username}) running on {gpu} (using {memory})".format(
+                process=process.name,
+                username=process.username,
+                gpu=process.gpu,
+                memory=process.memory_usage,
+            )
+            self.assertEqual(str(process), process_info)
+
+
 class LabSharePermissionTests(WebTest):
 
     csrf_checks = False
@@ -564,10 +629,9 @@ class LabSharePermissionTests(WebTest):
         self.staff_user = mommy.make(User)
         self.user = mommy.make(User)
         self.devices = mommy.make(Device, _quantity=3)
-        mommy.make(GPU, device=self.devices[0], _quantity=2, used_memory="12 Mib", free_memory="100 Mib",
-                   total_memory="112 Mib")
-        mommy.make(GPU, device=self.devices[1], used_memory="12 Mib", free_memory="100 Mib", total_memory="112 Mib")
-        mommy.make(GPU, device=self.devices[-1], used_memory="12 Mib", free_memory="100 Mib", total_memory="112 Mib")
+        mommy.make(GPU, device=self.devices[0], _quantity=2, used_memory="12 Mib", total_memory="112 Mib")
+        mommy.make(GPU, device=self.devices[1], used_memory="12 Mib", total_memory="112 Mib")
+        mommy.make(GPU, device=self.devices[-1], used_memory="12 Mib", total_memory="112 Mib")
 
         self.student_group = mommy.make(Group, name="students")
         self.user.groups.add(self.student_group)
@@ -689,3 +753,14 @@ class LabSharePermissionTests(WebTest):
         response = self.app.get(reverse("cancel_gpu", args=[self.devices[-1].gpus.first().id]), user=self.staff_user)
         self.assertRedirects(response, reverse("index"))
 
+
+class EmailAddressTests(WebTest):
+
+    def setUp(self):
+        user = mommy.make(User)
+        mommy.make(EmailAddress, _quantity=5, user=user)
+
+    def test_stringify_email_address(self):
+        for address in EmailAddress.objects.all():
+            address_info = "{}: {}".format(address.user, address.email)
+            self.assertEqual(str(address), address_info)

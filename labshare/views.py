@@ -97,7 +97,6 @@ def gpu_info(request):
     current_reservation = gpu.current_reservation()
 
     return_data = {
-        "free": gpu.free_memory,
         "used": gpu.used_memory,
         "total": gpu.total_memory,
         "user": current_reservation.user.username if current_reservation is not None else "No current user",

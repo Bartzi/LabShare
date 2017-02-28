@@ -29,7 +29,6 @@ class GPU(models.Model):
     device = models.ForeignKey(Device, related_name="gpus")
     last_updated = models.DateTimeField(auto_now=True)
     model_name = models.CharField(max_length=255)
-    free_memory = models.CharField(max_length=100)
     used_memory = models.CharField(max_length=100)
     total_memory = models.CharField(max_length=100)
     in_use = models.BooleanField(default=False)
@@ -51,6 +50,22 @@ class GPU(models.Model):
             return self.reservations.latest("time_reserved")
         except Reservation.DoesNotExist as e:
             return None
+
+
+class GPUProcess(models.Model):
+    gpu = models.ForeignKey(GPU, related_name="processes")
+    name = models.CharField(max_length=511, blank=True)
+    pid = models.PositiveIntegerField()
+    memory_usage = models.CharField(max_length=100, blank=True)
+    username = models.CharField(max_length=250, blank=True)
+
+    def __str__(self):
+        return "{process} (by {username}) running on {gpu} (using {memory})".format(
+            process=self.name,
+            username=self.username,
+            gpu=self.gpu,
+            memory=self.memory_usage,
+        )
 
 
 class Reservation(models.Model):
