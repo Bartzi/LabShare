@@ -22,9 +22,9 @@ class TestLabshare(WebTest):
     def setUp(self):
         self.user = mommy.make(User)
         self.devices = mommy.make(Device, _quantity=3)
-        mommy.make(GPU, device=self.devices[0], _quantity=2, used_memory="12 Mib", free_memory="100 Mib", total_memory="112 Mib")
-        mommy.make(GPU, device=self.devices[1], used_memory="12 Mib", free_memory="100 Mib", total_memory="112 Mib")
-        mommy.make(GPU, device=self.devices[-1], used_memory="12 Mib", free_memory="100 Mib", total_memory="112 Mib")
+        mommy.make(GPU, device=self.devices[0], _quantity=2, used_memory="12 Mib", total_memory="112 Mib")
+        mommy.make(GPU, device=self.devices[1], used_memory="12 Mib", total_memory="112 Mib")
+        mommy.make(GPU, device=self.devices[-1], used_memory="12 Mib", total_memory="112 Mib")
 
         self.group = mommy.make(Group)
         self.user.groups.add(self.group)
@@ -258,7 +258,6 @@ class TestLabshare(WebTest):
         )
         self.assertEqual(response.status_code, 200)
 
-        self.assertIn(gpu.free_memory, response.body.decode('utf-8'))
         self.assertIn(gpu.used_memory, response.body.decode('utf-8'))
         self.assertIn(gpu.total_memory, response.body.decode('utf-8'))
         self.assertIn("No current user", response.body.decode('utf-8'))
@@ -274,7 +273,6 @@ class TestLabshare(WebTest):
         )
         self.assertEqual(response.status_code, 200)
 
-        self.assertIn(gpu.free_memory, response.body.decode('utf-8'))
         self.assertIn(gpu.used_memory, response.body.decode('utf-8'))
         self.assertIn(gpu.total_memory, response.body.decode('utf-8'))
         self.assertIn(self.user.username, response.body.decode('utf-8'))
@@ -474,9 +472,9 @@ class TestMessages(WebTest):
     def setUp(self):
         self.user = mommy.make(User, is_superuser=True, is_staff=True)
         self.devices = mommy.make(Device, _quantity=3)
-        mommy.make(GPU, device=self.devices[0], _quantity=2, used_memory="12 Mib", free_memory="100 Mib", total_memory="112 Mib")
-        mommy.make(GPU, device=self.devices[1], used_memory="12 Mib", free_memory="100 Mib", total_memory="112 Mib")
-        mommy.make(GPU, device=self.devices[-1], used_memory="12 Mib", free_memory="100 Mib", total_memory="112 Mib")
+        mommy.make(GPU, device=self.devices[0], _quantity=2, used_memory="12 Mib", total_memory="112 Mib")
+        mommy.make(GPU, device=self.devices[1], used_memory="12 Mib", total_memory="112 Mib")
+        mommy.make(GPU, device=self.devices[-1], used_memory="12 Mib", total_memory="112 Mib")
 
         self.group = mommy.make(Group)
         for device in self.devices:
@@ -564,10 +562,9 @@ class LabSharePermissionTests(WebTest):
         self.staff_user = mommy.make(User)
         self.user = mommy.make(User)
         self.devices = mommy.make(Device, _quantity=3)
-        mommy.make(GPU, device=self.devices[0], _quantity=2, used_memory="12 Mib", free_memory="100 Mib",
-                   total_memory="112 Mib")
-        mommy.make(GPU, device=self.devices[1], used_memory="12 Mib", free_memory="100 Mib", total_memory="112 Mib")
-        mommy.make(GPU, device=self.devices[-1], used_memory="12 Mib", free_memory="100 Mib", total_memory="112 Mib")
+        mommy.make(GPU, device=self.devices[0], _quantity=2, used_memory="12 Mib", total_memory="112 Mib")
+        mommy.make(GPU, device=self.devices[1], used_memory="12 Mib", total_memory="112 Mib")
+        mommy.make(GPU, device=self.devices[-1], used_memory="12 Mib", total_memory="112 Mib")
 
         self.student_group = mommy.make(Group, name="students")
         self.user.groups.add(self.student_group)

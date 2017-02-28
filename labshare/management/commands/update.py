@@ -28,7 +28,6 @@ class Command(BaseCommand):
                             device=device,
                             model_name=gpu_data["name"],
                             uuid=gpu_data["uuid"],
-                            free_memory=gpu_data["memory"]["free"],
                             used_memory=gpu_data["memory"]["used"],
                             total_memory=gpu_data["memory"]["total"],
                             in_use=gpu_in_use,
@@ -36,7 +35,6 @@ class Command(BaseCommand):
                     else:
                         gpu = gpu.get()
                         memory_info = gpu_data["memory"]
-                        gpu.free_memory = memory_info["free"]
                         gpu.used_memory = memory_info["used"]
                         gpu.total_memory = memory_info["total"]
                         gpu.in_use = gpu_in_use

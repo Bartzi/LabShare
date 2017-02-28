@@ -29,7 +29,6 @@ class GPU(models.Model):
     device = models.ForeignKey(Device, related_name="gpus")
     last_updated = models.DateTimeField(auto_now=True)
     model_name = models.CharField(max_length=255)
-    free_memory = models.CharField(max_length=100)
     used_memory = models.CharField(max_length=100)
     total_memory = models.CharField(max_length=100)
     in_use = models.BooleanField(default=False)
