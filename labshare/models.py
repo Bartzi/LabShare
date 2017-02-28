@@ -52,6 +52,22 @@ class GPU(models.Model):
             return None
 
 
+class GPUProcess(models.Model):
+    gpu = models.ForeignKey(GPU, related_name="processes")
+    name = models.CharField(max_length=511, blank=True)
+    pid = models.PositiveIntegerField()
+    memory_usage = models.CharField(max_length=100, blank=True)
+    username = models.CharField(max_length=250, blank=True)
+
+    def __str__(self):
+        return "{process} (by {username}) running on {gpu} (using {memory})".format(
+            process=self.name,
+            username=self.username,
+            gpu=self.gpu,
+            memory=self.memory_usage,
+        )
+
+
 class Reservation(models.Model):
     gpu = models.ForeignKey(GPU, related_name="reservations")
     user = models.ForeignKey(User, related_name="reservations")

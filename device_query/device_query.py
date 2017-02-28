@@ -1,7 +1,9 @@
+import argparse
 import subprocess
 import xml.etree.ElementTree as ET
 import os
 import pwd
+import re
 import json
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
@@ -38,6 +40,8 @@ class DeviceQueryHandler(BaseHTTPRequestHandler):
                         process_info = {
                             "pid": pid,
                             "username": self.owner(pid),
+                            "name": process.find("process_name").text,
+                            "used_memory": process.find("used_memory").text,
                         }
                         current_gpu_data["processes"].append(process_info)
             current_gpu_data["memory"] = memory
@@ -53,6 +57,10 @@ class DeviceQueryHandler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         try:
+            if not re.match(self.allowed_client, self.client_address[0]):
+                self.send_error(403)
+                return
+
             raw_gpu_data = subprocess.check_output(["nvidia-smi", "-x", "-q"]).decode('utf-8')
             gpu_data = self.parse_nvidia_xml(raw_gpu_data)
             self.send_response(200)
@@ -64,7 +72,13 @@ class DeviceQueryHandler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    server = HTTPServer(("0.0.0.0", 12000), DeviceQueryHandler)
+    parser = argparse.ArgumentParser(description='Tool that provides information about GPUs in this machine')
+    parser.add_argument("-ac", "--allowed-client-address", default='.*', required=False, help="Restricts possible clients to given ip address")
+
+    args = parser.parse_args()
+
+    RestrictedDeviceQueryHandler = type('RestrictedDeviceQueryHandler', (DeviceQueryHandler,), dict(allowed_client=args.allowed_client_address))
+    server = HTTPServer(("0.0.0.0", 12000), RestrictedDeviceQueryHandler)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
