@@ -25,7 +25,7 @@ class Migration(migrations.Migration):
                 ('free_memory', models.CharField(max_length=100)),
                 ('used_memory', models.CharField(max_length=100)),
                 ('total_memory', models.CharField(max_length=100)),
-                ('device', models.ForeignKey(to='labshare.Device', related_name='gpus')),
+                ('device', models.ForeignKey(to='labshare.Device', related_name='gpus', on_delete='cascade')),
             ],
         ),
     ]

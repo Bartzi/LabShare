@@ -18,7 +18,7 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.AutoField(verbose_name='ID', serialize=False, primary_key=True, auto_created=True)),
                 ('email', models.EmailField(max_length=255, unique=True)),
-                ('user', models.ForeignKey(related_name='email_addresses', to=settings.AUTH_USER_MODEL)),
+                ('user', models.ForeignKey(related_name='email_addresses', to=settings.AUTH_USER_MODEL, on_delete='cascade')),
             ],
         ),
     ]

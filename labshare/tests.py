@@ -4,7 +4,7 @@ from unittest.mock import Mock
 
 from django import template
 from django.contrib.auth.models import User, Group
-from django.core.urlresolvers import reverse
+from django.urls import reverse
 from django_webtest import WebTest
 from guardian.shortcuts import assign_perm
 from guardian.utils import get_anonymous_user
@@ -21,18 +21,19 @@ class TestLabshare(WebTest):
 
     csrf_checks = False
 
-    def setUp(self):
-        self.user = mommy.make(User)
-        self.devices = mommy.make(Device, _quantity=3)
-        mommy.make(GPU, device=self.devices[0], _quantity=2, used_memory="12 Mib", total_memory="112 Mib")
-        mommy.make(GPU, device=self.devices[1], used_memory="12 Mib", total_memory="112 Mib")
-        mommy.make(GPU, device=self.devices[-1], used_memory="12 Mib", total_memory="112 Mib")
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = mommy.make(User)
+        cls.devices = mommy.make(Device, _quantity=3)
+        mommy.make(GPU, device=cls.devices[0], _quantity=2, used_memory="12 Mib", total_memory="112 Mib")
+        cls.gpu = mommy.make(GPU, device=cls.devices[1], used_memory="12 Mib", total_memory="112 Mib")
+        mommy.make(GPU, device=cls.devices[-1], used_memory="12 Mib", total_memory="112 Mib")
 
-        self.group = mommy.make(Group)
-        self.user.groups.add(self.group)
+        cls.group = mommy.make(Group)
+        cls.user.groups.add(cls.group)
 
-        for device in self.devices:
-            assign_perm('use_device', self.group, device)
+        for device in cls.devices:
+            assign_perm('use_device', cls.group, device)
 
     def test_index(self):
         response = self.app.get(reverse("index"), user=self.user)
@@ -103,7 +104,7 @@ class TestLabshare(WebTest):
         self.assertEqual(Reservation.objects.count(), 1)
 
     def test_reserve_next_available_gpu_one_reserved_gpu(self):
-        mommy.make(Reservation, gpu=self.devices[0].gpus.first())
+        mommy.make(Reservation, gpu=self.devices[0].gpus.first(), user=self.user)
 
         response = self.app.get(reverse("reserve"), user=self.user)
         self.assertEqual(response.status_code, 200)
@@ -121,7 +122,7 @@ class TestLabshare(WebTest):
 
     def test_reserve_next_available_gpu_two_reserved_gpus(self):
         for gpu in self.devices[0].gpus.all():
-            mommy.make(Reservation, gpu=gpu)
+            mommy.make(Reservation, gpu=gpu, user=self.user)
 
         response = self.app.get(reverse("reserve"), user=self.user)
         self.assertEqual(response.status_code, 200)
@@ -152,7 +153,7 @@ class TestLabshare(WebTest):
         self.assertEqual(Reservation.objects.count(), 1)
 
     def test_reserve_next_available_spot_one_gpu_reservation(self):
-        mommy.make(Reservation, gpu=self.devices[1].gpus.first())
+        mommy.make(Reservation, gpu=self.devices[1].gpus.first(), user=self.user)
 
         response = self.app.get(reverse("reserve"), user=self.user)
         self.assertEqual(response.status_code, 200)
@@ -451,11 +452,11 @@ class TestLabshare(WebTest):
         self.assertEqual(str(device), device.name)
 
     def test_gpu_str_representation(self):
-        gpu = mommy.prepare(GPU)
+        gpu = mommy.prepare(GPU, device=self.devices[0])
         self.assertEqual(str(gpu), gpu.model_name)
 
     def test_reservation_str_representation(self):
-        reservation = mommy.prepare(Reservation)
+        reservation = mommy.prepare(Reservation, gpu=self.gpu, user=self.user)
         self.assertEqual(str(reservation), "{gpu} on {device}, {user}".format(
             gpu=reservation.gpu,
             device=reservation.gpu.device,

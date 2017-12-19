@@ -5,9 +5,9 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.core.exceptions import ObjectDoesNotExist, PermissionDenied
 from django.core.mail import EmailMessage
-from django.core.urlresolvers import reverse
 from django.http import HttpResponseRedirect, HttpResponseBadRequest, HttpResponse, HttpResponseForbidden, Http404
 from django.shortcuts import get_object_or_404
+from django.urls import reverse
 
 from .forms import DeviceSelectForm, MessageForm
 from labshare.utils import send_reservation_mail_for, send_gpu_done_mail, login_required_ajax
