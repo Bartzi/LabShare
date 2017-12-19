@@ -17,8 +17,8 @@ class Migration(migrations.Migration):
             name='Reservation',
             fields=[
                 ('id', models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('gpu', models.ForeignKey(to='labshare.GPU', related_name='reservations')),
-                ('user', models.ForeignKey(to=settings.AUTH_USER_MODEL, related_name='reservations')),
+                ('gpu', models.ForeignKey(to='labshare.GPU', related_name='reservations', on_delete='cascade')),
+                ('user', models.ForeignKey(to=settings.AUTH_USER_MODEL, related_name='reservations', on_delete='cascade')),
             ],
         ),
     ]
