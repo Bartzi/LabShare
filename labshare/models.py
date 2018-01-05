@@ -26,7 +26,7 @@ class Device(models.Model):
 
 class GPU(models.Model):
     uuid = models.CharField(unique=True, max_length=255)
-    device = models.ForeignKey(Device, related_name="gpus", on_delete='cascade')
+    device = models.ForeignKey(Device, related_name="gpus", on_delete=models.CASCADE)
     last_updated = models.DateTimeField(auto_now=True)
     model_name = models.CharField(max_length=255)
     used_memory = models.CharField(max_length=100)
@@ -37,7 +37,7 @@ class GPU(models.Model):
         return self.model_name
 
     def last_update_too_long_ago(self):
-        return self.last_updated < timezone.now() - timedelta(minutes = 30)
+        return self.last_updated < timezone.now() - timedelta(minutes=30)
 
     def current_reservation(self):
         try:
@@ -53,7 +53,7 @@ class GPU(models.Model):
 
 
 class GPUProcess(models.Model):
-    gpu = models.ForeignKey(GPU, related_name="processes", on_delete='cascade')
+    gpu = models.ForeignKey(GPU, related_name="processes", on_delete=models.CASCADE)
     name = models.CharField(max_length=511, blank=True)
     pid = models.PositiveIntegerField()
     memory_usage = models.CharField(max_length=100, blank=True)
@@ -69,8 +69,8 @@ class GPUProcess(models.Model):
 
 
 class Reservation(models.Model):
-    gpu = models.ForeignKey(GPU, related_name="reservations", on_delete='cascade')
-    user = models.ForeignKey(User, related_name="reservations", on_delete='cascade')
+    gpu = models.ForeignKey(GPU, related_name="reservations", on_delete=models.CASCADE)
+    user = models.ForeignKey(User, related_name="reservations", on_delete=models.CASCADE)
     time_reserved = models.DateTimeField(auto_now_add=True)
     user_reserved_next_available_spot = models.BooleanField(default=False)
 
@@ -79,7 +79,7 @@ class Reservation(models.Model):
 
 
 class EmailAddress(models.Model):
-    user = models.ForeignKey(User, related_name="email_addresses", on_delete='cascade')
+    user = models.ForeignKey(User, related_name="email_addresses", on_delete=models.CASCADE)
     email = models.EmailField(max_length=255, unique=True)
 
     def __str__(self):
