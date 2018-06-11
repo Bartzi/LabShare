@@ -79,8 +79,16 @@ DATABASES = {
 
 AUTHENTICATION_BACKENDS = (
     'django.contrib.auth.backends.ModelBackend', # this is default
+    'labshare.backends.authentication.ldap.LDAPBackend',
     'guardian.backends.ObjectPermissionBackend',
 )
+
+AUTH_LDAP_USER_ATTR_MAP = {
+    "first_name": "cn",
+    "last_name": "sn",
+    "username": "uid",
+    "email": "mail"
+}
 
 EMAIL_BACKEND = 'labshare.backends.mail.open_smtp.OpenSMTPBackend'
 EMAIL_HOST = "localhost"
