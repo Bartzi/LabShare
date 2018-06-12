@@ -80,7 +80,7 @@ class Reservation(models.Model):
 
 class EmailAddress(models.Model):
     user = models.ForeignKey(User, related_name="email_addresses", on_delete=models.CASCADE)
-    email = models.EmailField(max_length=255, unique=True)
+    email = models.EmailField(max_length=255)
 
     def __str__(self):
         return "{}: {}".format(self.user, self.email)
