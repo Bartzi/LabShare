@@ -1,5 +1,6 @@
 import random
 from datetime import timedelta
+from django.core import mail
 from unittest.mock import Mock
 
 from django import template
@@ -483,7 +484,7 @@ class TestMessages(WebTest):
     csrf_checks = False
 
     def setUp(self):
-        self.user = mommy.make(User, is_superuser=True, is_staff=True)
+        self.user = mommy.make(User, is_superuser=True, is_staff=True, email="test@example.com")
         self.devices = mommy.make(Device, _quantity=3)
         mommy.make(GPU, device=self.devices[0], _quantity=2, used_memory="12 Mib", total_memory="112 Mib")
         mommy.make(GPU, device=self.devices[1], used_memory="12 Mib", total_memory="112 Mib")
@@ -523,18 +524,67 @@ class TestMessages(WebTest):
         self.assertEqual(response.status_code, 302)
         self.assertRedirects(response, reverse("index"))
 
+        num_email_addresses = User.objects.count()
+        num_email_addresses += EmailAddress.objects.count()
+        self.assertEqual(len(mail.outbox[0].bcc), num_email_addresses - 1)
+
     def test_send_message_to_specific_user(self):
         response = self.app.get(reverse("send_message"), user=self.user)
         self.assertEqual(response.status_code, 200)
 
         form = response.form
-        form['recipient'] = '1'
+        form['recipients'] = '1'
         form['subject'] = 'subject'
         form['message'] = 'message'
 
         response = form.submit()
         self.assertEqual(response.status_code, 302)
         self.assertRedirects(response, reverse("index"))
+
+        # check that the right amount of mails with the right settings is sent
+        sent_mail = mail.outbox[0]
+        to_address = sent_mail.to
+        self.assertEqual(to_address[0], User.objects.get(id=1).email)
+        self.assertEqual(len(to_address), 1)
+
+        from_address = sent_mail.from_email
+        self.assertEqual(from_address, self.user.email)
+
+        cc_address = sent_mail.cc
+        self.assertEqual(len(cc_address), 1)
+        self.assertEqual(cc_address[0], self.user.email)
+
+        self.assertEqual(len(sent_mail.bcc), 0)
+
+    def test_send_message_to_multiple_users(self):
+        response = self.app.get(reverse("send_message"), user=self.user)
+        self.assertEqual(response.status_code, 200)
+        _ = mommy.make(User)
+
+        form = response.form
+        form['recipients'] = ['1', '2']
+        form['subject'] = 'subject'
+        form['message'] = 'message'
+
+        response = form.submit()
+        self.assertEqual(response.status_code, 302)
+        self.assertRedirects(response, reverse("index"))
+
+        # check that the right amount of mails with the right settings is sent
+        sent_mail = mail.outbox[0]
+        to_address = sent_mail.to
+        self.assertEqual(len(to_address), 2)
+        self.assertEqual(to_address[0], User.objects.get(id=1).email)
+        self.assertEqual(to_address[1], User.objects.get(id=2).email)
+
+        from_address = sent_mail.from_email
+        self.assertEqual(from_address, self.user.email)
+
+        cc_address = sent_mail.cc
+        self.assertEqual(len(cc_address), 1)
+        self.assertEqual(cc_address[0], self.user.email)
+
+        self.assertEqual(len(sent_mail.bcc), 0)
 
     def test_send_message_to_all_not_permitted(self):
         user = mommy.make(User)
@@ -553,6 +603,7 @@ class TestMessages(WebTest):
 
         response = self.app.post(reverse("send_message"), params=data, user=user, expect_errors=True)
         self.assertEqual(response.status_code, 400)
+        self.assertEqual(len(mail.outbox), 0)
 
     def test_send_message_no_recipient_selected(self):
         response = self.app.get(reverse("send_message"), user=self.user)
@@ -564,7 +615,32 @@ class TestMessages(WebTest):
 
         response = form.submit()
         self.assertEqual(response.status_code, 200)
-        self.assertIn("Please select a recipient", response.body.decode('utf-8'))
+        self.assertIn("Please select at least one recipient", response.body.decode('utf-8'))
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_send_message_multiple_email_addresses(self):
+        addresses = [address.email for address in mommy.make(EmailAddress, _quantity=3, user=self.user)]
+        addresses.append(self.user.email)
+        response = self.app.get(reverse("send_message"), user=self.user)
+        self.assertEqual(response.status_code, 200)
+
+        form = response.form
+        form['recipients'] = '2'
+        form['subject'] = 'subject'
+        form['message'] = 'message'
+
+        response = form.submit()
+        self.assertEqual(response.status_code, 302)
+        self.assertRedirects(response, reverse("index"))
+        self.assertEqual(len(mail.outbox), 1)
+
+        to_addresses = mail.outbox[0].to
+        for address in addresses:
+            self.assertIn(address, to_addresses)
+
+        cc_addresses = mail.outbox[0].cc
+        for address in addresses:
+            self.assertIn(address, cc_addresses)
 
 
 class GPUProcessTests(WebTest):
