@@ -32,6 +32,7 @@ class GPU(models.Model):
     used_memory = models.CharField(max_length=100)
     total_memory = models.CharField(max_length=100)
     in_use = models.BooleanField(default=False)
+    marked_as_failed = models.BooleanField(default=False)
 
     def __str__(self):
         return self.model_name

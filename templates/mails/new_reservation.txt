@@ -3,7 +3,7 @@ Hi {{reservation.user.username}},
 This is to inform you that {{user.username}} just reserved the GPU ({{gpu.model_name}} belonging to {{gpu.device.name}}) you are currently using.
 You may go on using the GPU until your current experiment is finished. Please make sure to click "done" at the LabShare page after you've finished your current experiment.
 
-Best Regards
+Best Regards,
 LabShare
 
 

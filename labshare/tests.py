@@ -1,21 +1,24 @@
-import random
+import datetime
+import io
+import json
+import mock as mock
 from datetime import timedelta
-from django.core import mail
-from unittest.mock import Mock
-
 from django import template
 from django.contrib.auth.models import User, Group
+from django.core import mail
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from django_webtest import WebTest
 from guardian.shortcuts import assign_perm
 from guardian.utils import get_anonymous_user
 from model_mommy import mommy
+from unittest.mock import Mock
+from urllib.error import URLError
 
 from labshare.models import Device, GPU, Reservation, GPUProcess, EmailAddress
-
 from labshare.templatetags.icon import icon
 from labshare.templatetags.reservations import queue_position
-from labshare.utils import get_devices
+from labshare.utils import get_devices, update_gpu_info, determine_failed_gpus
 
 
 class TestLabshare(WebTest):
@@ -841,3 +844,242 @@ class EmailAddressTests(WebTest):
         for address in EmailAddress.objects.all():
             address_info = "{}: {}".format(address.user, address.email)
             self.assertEqual(str(address), address_info)
+
+
+def fail_url(url, timeout=None):
+    raise URLError("400")
+
+
+def working_gpu_data_with_one_gpu_not_in_use(url, timeout=None):
+    return json.dumps([
+        {
+            "name": "Test GPU",
+            "uuid": "lorem",
+            "memory": {
+                "total": "100 MB",
+                "used": "20 MB",
+                "free": "80 MB",
+            },
+            "in_use": "no",
+            "processes": [],
+        }
+    ])
+
+
+def working_gpu_data_with_one_gpu_in_use(url, timeout=None):
+    base_data = working_gpu_data_with_one_gpu_not_in_use(url, timeout=timeout)
+    base_data = json.loads(base_data)[0]
+    base_data["in_use"] = "yes"
+    base_data["processes"] = [
+        {
+            "pid": 1,
+            "username": "Mr. Keks",
+            "name": "TestProcess",
+            "used_memory": "10 MB",
+        }
+    ]
+    return json.dumps([base_data])
+
+
+def working_gpu_data_with_one_gpu_use_na_false(url, timeout=None):
+    base_data = working_gpu_data_with_one_gpu_not_in_use(url, timeout=timeout)
+    base_data = json.loads(base_data)[0]
+    base_data["in_use"] = "na"
+    return json.dumps([base_data])
+
+
+def working_gpu_data_with_one_gpu_use_na_true(url, timeout=None):
+    base_data = working_gpu_data_with_one_gpu_not_in_use(url, timeout=timeout)
+    base_data = json.loads(base_data)[0]
+    base_data["in_use"] = "na"
+    base_data["memory"]["used"] = "900 MB"
+    return json.dumps([base_data])
+
+
+def return_bytes_io(func):
+    def wrapper(*args, **kwargs):
+        data = func(*args, **kwargs)
+        stream = io.BytesIO(bytearray(data, encoding='utf-8'))
+        return stream
+    return wrapper
+
+
+class UpdateGPUTests(TestCase):
+
+    def setUp(self):
+        self.device = mommy.make(Device)
+
+    @mock.patch("urllib.request.urlopen", fail_url)
+    def test_update_gpu_info_no_gpu_works(self):
+        mommy.make(Device)
+        for device in Device.objects.all():
+            mommy.make(GPU, device=device, _quantity=2)
+        pre_call_last_update = [gpu.last_updated for gpu in GPU.objects.all()]
+        update_gpu_info()
+        post_call_last_update = [gpu.last_updated for gpu in GPU.objects.all()]
+        for timestamp_before_call, timestamp_after_call in zip(pre_call_last_update, post_call_last_update):
+            self.assertEqual(timestamp_before_call, timestamp_after_call)
+
+    @mock.patch("urllib.request.urlopen", return_bytes_io(working_gpu_data_with_one_gpu_not_in_use))
+    def test_update_gpu_info_new_gpu(self):
+        self.assertEqual(GPU.objects.count(), 0)
+        update_gpu_info()
+        self.assertEqual(GPU.objects.count(), 1)
+
+    @mock.patch("urllib.request.urlopen", return_bytes_io(working_gpu_data_with_one_gpu_in_use))
+    def test_update_gpu_info_new_gpu_in_use(self):
+        self.assertEqual(GPU.objects.count(), 0)
+        update_gpu_info()
+        self.assertEqual(GPU.objects.count(), 1)
+        gpu = GPU.objects.get()
+        self.assertTrue(gpu.in_use)
+        self.assertEqual(GPUProcess.objects.count(), 1)
+
+    @mock.patch("urllib.request.urlopen", return_bytes_io(working_gpu_data_with_one_gpu_use_na_false))
+    def test_update_gpu_info_new_gpu_use_na_false(self):
+        self.assertEqual(GPU.objects.count(), 0)
+        update_gpu_info()
+        self.assertEqual(GPU.objects.count(), 1)
+        gpu = GPU.objects.get()
+        self.assertFalse(gpu.in_use)
+
+    @mock.patch("urllib.request.urlopen", return_bytes_io(working_gpu_data_with_one_gpu_use_na_true))
+    def test_update_gpu_info_new_gpu_use_na_true(self):
+        self.assertEqual(GPU.objects.count(), 0)
+        update_gpu_info()
+        self.assertEqual(GPU.objects.count(), 1)
+        gpu = GPU.objects.get()
+        self.assertTrue(gpu.in_use)
+
+    @mock.patch("urllib.request.urlopen", return_bytes_io(working_gpu_data_with_one_gpu_in_use))
+    def test_update_gpu_info_old_gpu_switch_to_in_use(self):
+        mommy.make(GPU, device=self.device, uuid="lorem", in_use=False)
+        self.assertEqual(GPU.objects.count(), 1)
+        self.assertEqual(GPUProcess.objects.count(), 0)
+        update_gpu_info()
+        self.assertEqual(GPU.objects.count(), 1)
+        gpu = GPU.objects.get()
+        self.assertTrue(gpu.in_use)
+        self.assertEqual(GPUProcess.objects.count(), 1)
+
+    @mock.patch("urllib.request.urlopen", return_bytes_io(working_gpu_data_with_one_gpu_in_use))
+    def test_update_gpu_info_old_gpu_add_new_in_use_gpu(self):
+        mommy.make(GPU, device=self.device, uuid="test", in_use=False)
+        self.assertEqual(GPU.objects.count(), 1)
+        self.assertEqual(GPUProcess.objects.count(), 0)
+        update_gpu_info()
+        self.assertEqual(GPU.objects.count(), 2)
+        gpu = GPU.objects.get(uuid="lorem")
+        self.assertTrue(gpu.in_use)
+        self.assertEqual(GPUProcess.objects.count(), 1)
+
+    @mock.patch("urllib.request.urlopen", return_bytes_io(working_gpu_data_with_one_gpu_in_use))
+    def test_update_gpu_info_old_gpu_add_new_processes(self):
+        gpu = mommy.make(GPU, device=self.device, uuid="lorem", in_use=False)
+        process = mommy.make(GPUProcess, gpu=gpu)
+        self.assertEqual(GPU.objects.count(), 1)
+        self.assertEqual(GPUProcess.objects.count(), 1)
+        update_gpu_info()
+        self.assertEqual(GPU.objects.count(), 1)
+        gpu = GPU.objects.get(uuid="lorem")
+        self.assertTrue(gpu.in_use)
+        self.assertEqual(GPUProcess.objects.count(), 1)
+        self.assertNotEqual(GPUProcess.objects.get(), process)
+
+
+admin_mail = "test@example.com"
+
+
+@override_settings(ADMINS=(("Test", admin_mail),))
+class FailedGPUTests(TestCase):
+
+    def setUp(self):
+        with mock.patch("django.utils.timezone.now") as mock_now:
+            mock_now.return_value = datetime.datetime.now(tz=datetime.timezone.utc) - datetime.timedelta(hours=2)
+            self.gpu_1 = mommy.make(GPU)
+        self.gpu_2 = mommy.make(GPU)
+        self.user = mommy.make(User)
+
+    def test_failed_gpus_fresh_fail(self):
+        pre_last_update = self.gpu_1.last_updated
+        determine_failed_gpus()
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn(admin_mail, mail.outbox[0].to)
+        gpu = GPU.objects.get(id=self.gpu_1.id)
+        self.assertTrue(gpu.marked_as_failed)
+        self.assertEqual(gpu.last_updated, pre_last_update)
+
+    def test_failed_gpus_with_user_with_single_email(self):
+        mommy.make(Reservation, user=self.user, gpu=self.gpu_1)
+        mommy.make(Reservation, user=self.user, gpu=self.gpu_2)
+
+        pre_last_update = self.gpu_1.last_updated
+        determine_failed_gpus()
+        self.assertEqual(len(mail.outbox), 1)
+        sent_mail = mail.outbox[0]
+        self.assertIn(self.user.email, sent_mail.to)
+        self.assertIn(admin_mail, sent_mail.cc)
+        gpu = GPU.objects.get(id=self.gpu_1.id)
+        self.assertTrue(gpu.marked_as_failed)
+        self.assertEqual(gpu.last_updated, pre_last_update)
+
+    def test_failed_gpus_with_multiple_email_addresses(self):
+        mommy.make(Reservation, user=self.user, gpu=self.gpu_1)
+        mommy.make(Reservation, user=self.user, gpu=self.gpu_2)
+        mommy.make(EmailAddress, user=self.user, _quantity=2)
+        all_email_addresses = [address.email for address in EmailAddress.objects.filter(user=self.user)]
+        all_email_addresses.append(self.user.email)
+
+        pre_last_update = self.gpu_1.last_updated
+        determine_failed_gpus()
+        self.assertEqual(len(mail.outbox), 1)
+        sent_mail = mail.outbox[0]
+        for address in all_email_addresses:
+            self.assertIn(address, sent_mail.to)
+        self.assertIn(admin_mail, sent_mail.cc)
+        gpu = GPU.objects.get(id=self.gpu_1.id)
+        self.assertTrue(gpu.marked_as_failed)
+        self.assertEqual(gpu.last_updated, pre_last_update)
+
+    def test_already_failed_gpu_no_resend(self):
+        self.gpu_1.marked_as_failed = True
+        with mock.patch("django.utils.timezone.now") as mock_now:
+            mock_now.return_value = datetime.datetime.now(tz=datetime.timezone.utc) - datetime.timedelta(hours=2)
+            self.gpu_1.save()
+
+        determine_failed_gpus()
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_multiple_failed_gpus(self):
+        mommy.make(Reservation, user=self.user, gpu=self.gpu_1)
+        with mock.patch("django.utils.timezone.now") as mock_now:
+            mock_now.return_value = datetime.datetime.now(tz=datetime.timezone.utc) - datetime.timedelta(hours=2)
+            self.gpu_2.model_name = "new name to force date change"
+            self.gpu_2.save()
+
+        determine_failed_gpus()
+        self.assertEqual(len(mail.outbox), 2)
+
+        first_mail = mail.outbox[0]
+        self.assertIn(self.user.email, first_mail.to)
+        self.assertIn(admin_mail, first_mail.cc)
+        gpu = GPU.objects.get(id=self.gpu_1.id)
+        self.assertTrue(gpu.marked_as_failed)
+
+        second_mail = mail.outbox[1]
+        self.assertIn(admin_mail, second_mail.to)
+        self.assertIn(admin_mail, second_mail.cc)
+        gpu = GPU.objects.get(id=self.gpu_2.id)
+        self.assertTrue(gpu.marked_as_failed)
+
+    def test_already_failed_gpu_no_resend_but_send_new_fail(self):
+        self.gpu_1.marked_as_failed = True
+        with mock.patch("django.utils.timezone.now") as mock_now:
+            mock_now.return_value = datetime.datetime.now(tz=datetime.timezone.utc) - datetime.timedelta(hours=2)
+            self.gpu_1.save()
+            self.gpu_2.model_name = "new name to force date change"
+            self.gpu_2.save()
+
+        determine_failed_gpus()
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn(self.gpu_2.model_name, mail.outbox[0].message().as_string())
