@@ -50,7 +50,7 @@
                                             </button>
                                         {% endwith %}
                                     </td>
-                                    <td>{{ gpu.last_updated }}{% if gpu.last_update_too_long_ago %} {% icon exclamation-sign %} {% endif %}</td>
+                                    <td>{{ gpu.last_updated }}{% if gpu.marked_as_failed %} {% icon exclamation-sign %} {% endif %}</td>
                                     <td>{{ gpu|current_reservation }}</td>
                                     <td>{{ gpu|next_reservation }}</td>
                                     {% with queue_position=gpu|queue_position:user %}

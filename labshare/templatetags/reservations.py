@@ -1,21 +1,18 @@
 from django import template
+
+from labshare.utils import get_current_reservation, get_next_reservation
+
 register = template.Library()
 
 
 @register.filter
 def current_reservation(gpu):
-    reservations = gpu.reservations.all()
-    if len(reservations) == 0:
-        return ""
-    return reservations.order_by("time_reserved").first().user
+    return get_current_reservation(gpu)
 
 
 @register.filter
 def next_reservation(gpu):
-    reservations = gpu.reservations.all()
-    if len(reservations) <= 1:
-        return ""
-    return reservations.order_by("time_reserved").all()[1].user
+    return get_next_reservation(gpu)
 
 
 @register.filter

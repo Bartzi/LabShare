@@ -1,0 +1,7 @@
+Hi {{ user.username }},
+
+we've noticed that there is a problem with the GPU {{ gpu.model_name }} belonging to {{ gpu.device.name }}.
+Please have a look at the GPU. We also notified the admins, they will also check for any problem and try to resolve it as soon as possible, if you are not able to resolve it by yourself.
+
+Best Regards,
+Labshare
