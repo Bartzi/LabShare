@@ -178,12 +178,13 @@ def send_message(request):
             bcc_addresses.extend([address.email for user in users for address in user.email_addresses.all()])
             email_addresses = [sender.email]
         else:
-            recipient = form.cleaned_data.get('recipient')
-            if recipient is None:
-                form.add_error('recipient', "Please select a recipient")
+            recipients = form.cleaned_data.get('recipients')
+            if len(recipients) == 0:
+                form.add_error('recipients', "Please select at least one recipient")
                 return {"form": form}
-            email_addresses = [address.email for address in recipient.email_addresses.all()]
-            email_addresses.append(recipient.email)
+            recipients = recipients.all()
+            email_addresses = [address.email for recipient in recipients for address in recipient.email_addresses.all()]
+            email_addresses.extend([recipient.email for recipient in recipients])
 
         subject = form.cleaned_data.get('subject')
         message = form.cleaned_data.get('message')

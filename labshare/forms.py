@@ -1,5 +1,6 @@
 from django import forms
 from django.contrib.auth.models import User
+from django.forms import SelectMultiple
 
 from .utils import get_devices
 
@@ -17,6 +18,10 @@ class DeviceSelectForm(forms.Form):
 
 class MessageForm(forms.Form):
     message_all_users = forms.BooleanField(required=False)
-    recipient = forms.ModelChoiceField(queryset=User.objects.all(), required=False)
+    recipients = forms.ModelMultipleChoiceField(
+        queryset=User.objects.all(),
+        required=False,
+        widget=SelectMultiple(attrs={"id": "recipients-field", "multiple": "multiple"})
+    )
     subject = forms.CharField(required=True)
     message = forms.CharField(widget=forms.Textarea, required=True)
