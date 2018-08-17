@@ -2,6 +2,10 @@
 
 {% load bootstrap3 %}
 
+{% block extra_css %}
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.6-rc.0/css/select2.min.css" rel="stylesheet" />
+{% endblock %}
+
 {% block content %}
     <h1 class="page-header">Send Message</h1>
 
@@ -10,7 +14,7 @@
         {% if user.is_staff %}
             {% bootstrap_field form.message_all_users %}
         {% endif %}
-        {% bootstrap_field form.recipient %}
+        {% bootstrap_field form.recipients %}
         {% bootstrap_field form.subject %}
         {% bootstrap_field form.message %}
         {% buttons %}
@@ -19,4 +23,13 @@
 			</button>
         {% endbuttons %}
     </form>
+{% endblock %}
+
+{% block scripts %}
+    {{ block.super }}
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.6-rc.0/js/select2.min.js"></script>
+
+    <script>
+        $('#recipients-field').select2();
+    </script>
 {% endblock %}
