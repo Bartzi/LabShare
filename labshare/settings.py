@@ -40,7 +40,7 @@ EMAIL_BACKEND = 'labshare.backends.mail.open_smtp.OpenSMTPBackend'
 EMAIL_HOST = "localhost"
 EMAIL_PORT = "25"
 
-# Application definition
+HIJACK_USE_BOOTSTRAP = True
 
 INSTALLED_APPS = (
     'django.contrib.admin',

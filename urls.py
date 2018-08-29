@@ -17,5 +17,7 @@ urlpatterns = [
 
     path('accounts/login', auth_views.login, {'template_name': 'login.html', }),
     path(r'login/', auth_views.login, {'template_name': 'login.html', }),
+    path('view-as', views.view_as, name="view_as"),
+    path('hijack/', include('hijack.urls', namespace='hijack')),
     path('', include('django.contrib.auth.urls')),
 ]

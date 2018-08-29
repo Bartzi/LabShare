@@ -1,5 +1,6 @@
 {% load staticfiles icon %}
 {% load bootstrap3 %}
+{% load hijack_tags %}
 
 <!DOCTYPE html>
 <html lang="en">
@@ -18,6 +19,9 @@
     <!-- Bootstrap Core CSS -->
     <link href="{% static "Bootstrap-3.3.5/css/bootstrap.min.css" %}" rel="stylesheet">
     <link href="{% static "Bootstrap-3.3.5/fonts/glyphicons-halflings-regular.woff" %}" rel="stylesheet">
+    {% if request and request|is_hijacked %}
+        <link rel="stylesheet" type="text/css" href="{% static 'hijack/hijack-styles.css' %}" />
+    {% endif %}
 
 
     <style type="text/css">
@@ -75,10 +79,15 @@
                                     {% icon user %} {% icon menu-down %}
                                 </a>
                                 <ul class="dropdown-menu dropdown-user">
-                                    {% if user.is_staff %}
-                                    <li>
-                                        <a href="{% url "admin:index" %}">{% icon sunglasses %} Admin Area</a>
-                                    </li>
+                                    {% if user.is_staff or user.is_superuser %}
+                                        <li>
+                                            <a href="{% url "admin:index" %}">{% icon sunglasses %} Admin Area</a>
+                                        </li>
+                                        {% if user.is_superuser %}
+                                            <li>
+                                                <a href="{% url "view_as" %}">{% icon eye-open %} Hijack a User</a>
+                                            </li>
+                                        {% endif %}
                                     <li role="separator" class="divider"></li>
                                     {% endif %}
                                     <li><a href="{% url "password_change" %}">{% icon wrench %} Change Password</a></li>
@@ -94,6 +103,8 @@
             </div>
         </nav>
     </div>
+
+    {% hijack_notification %}
 
     <div class="container" id="content-wrapper">
         {% bootstrap_messages %}
