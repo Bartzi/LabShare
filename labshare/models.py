@@ -12,7 +12,7 @@ class Device(models.Model):
 
     class Meta:
         permissions = (
-            ('use_device', 'User/Group is not allowed to use that device'),
+            ('use_device', 'User/Group is allowed to use that device'),
         )
 
     def __str__(self):
