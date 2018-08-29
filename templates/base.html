@@ -17,8 +17,8 @@
     </title>
 
     <!-- Bootstrap Core CSS -->
-    <link href="{% static "Bootstrap-3.3.5/css/bootstrap.min.css" %}" rel="stylesheet">
-    <link href="{% static "Bootstrap-3.3.5/fonts/glyphicons-halflings-regular.woff" %}" rel="stylesheet">
+    <link href="{% static "bower_components/bootstrap/dist/css/bootstrap.min.css" %}" rel="stylesheet">
+    <link href="{% static "bower_components/bootstrap/dist/fonts/glyphicons-halflings-regular.woff" %}">
     {% if request and request|is_hijacked %}
         <link rel="stylesheet" type="text/css" href="{% static 'hijack/hijack-styles.css' %}" />
     {% endif %}
@@ -119,11 +119,11 @@
 
     {% block scripts %}
         <!-- jQuery -->
-        <script src="{% static "jQuery-2.1.4/jquery-2.1.4.min.js" %}"></script>
+        <script src="{% static "bower_components/jquery/dist/jquery.min.js" %}"></script>
         <script src="{% static "js/utils.js" %}"></script>
 
         <!-- Bootstrap Core JavaScript -->
-        <script src="{% static "Bootstrap-3.3.5/js/bootstrap.min.js" %}"></script>
+        <script src="{% static "bower_components/bootstrap/dist/js/bootstrap.min.js" %}"></script>
     {% endblock %}
 </body>
 
