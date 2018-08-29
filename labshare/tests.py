@@ -1083,3 +1083,48 @@ class FailedGPUTests(TestCase):
         determine_failed_gpus()
         self.assertEqual(len(mail.outbox), 1)
         self.assertIn(self.gpu_2.model_name, mail.outbox[0].message().as_string())
+
+
+class HijackTests(WebTest):
+    csrf_checks = False
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.super_user = mommy.make(User, is_superuser=True, is_staff=True)
+        cls.user = mommy.make(User)
+
+    def test_superuser_can_see_link(self):
+        response = self.app.get(reverse("index"), user=self.super_user)
+        self.assertEqual(response.status_code, 200)
+
+        body = response.body.decode('utf-8')
+        self.assertIn("Hijack a User", body)
+
+    def test_non_superuser_can_not_see_link(self):
+        response = self.app.get(reverse("index"), user=self.user)
+        self.assertEqual(response.status_code, 200)
+
+        body = response.body.decode('utf-8')
+        self.assertNotIn("Hijack a User", body)
+
+        self.user.is_staff = True
+        self.user.save()
+
+        response = self.app.get(reverse("index"), user=self.user)
+        self.assertEqual(response.status_code, 200)
+
+        body = response.body.decode('utf-8')
+        self.assertNotIn("Hijack a User", body)
+
+    def test_non_superuser_can_not_request_hijack_select_page(self):
+        response = self.app.get(reverse('view_as'), user=self.user, expect_errors=True)
+        self.assertEqual(response.status_code, 403)
+
+    def test_super_user_can_request_hijack_select_page(self):
+        response = self.app.get(reverse('view_as'), user=self.super_user)
+        self.assertEqual(response.status_code, 200)
+
+        body = response.body.decode('utf-8')
+        usernames = [u.username for u in User.objects.all()]
+        for username in usernames:
+            self.assertIn(username, body)

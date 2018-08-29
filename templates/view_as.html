@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+
+{% load bootstrap3 %}
+
+{% block content %}
+    {{ block.super }}
+    <h1 class="page-header">View Page as a different User</h1>
+
+    <form action="" method="post" class="form-horizontal" role="form" id="user_impersonation_form">
+    {% bootstrap_form form layout='horizontal' %}
+    {% csrf_token %}
+    {% buttons %}
+    <div class="col-md-offset-2 col-md-4">
+        <button type="submit" class="btn btn-primary" disabled>
+            View page as selected user
+        </button>
+    </div>
+    {% endbuttons %}
+    </form>
+{% endblock %}
+
+{% block scripts %}
+    {{ block.super }}
+
+    <script type="text/javascript">
+        $("#id_username").on('change', function() {
+            var selectedUserId = $(this).find(":selected").val();
+            var form = $('#user_impersonation_form');
+            form.attr('action', 'hijack/' + selectedUserId + '/');
+            form.find(":submit").prop('disabled', false);
+        });
+    </script>
+{% endblock %}

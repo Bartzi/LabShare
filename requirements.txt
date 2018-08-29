@@ -5,3 +5,4 @@ model_mommy >= 1.2.6
 python-coveralls >= 2.5.0
 django-guardian >= 1.4.6
 django-auth-ldap >= 1.6.1
+django-hijack >= 2.1.10
