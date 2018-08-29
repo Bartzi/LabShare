@@ -1,23 +1,46 @@
 # Build paths inside the project like this: os.path.join(BASE_DIR, ...)
 import os
 
+ADMINS = ()
+ALLOWED_HOSTS = []
+
+AUTHENTICATION_BACKENDS = (
+    'django.contrib.auth.backends.ModelBackend', # this is default
+    'labshare.backends.authentication.ldap.LDAPBackend',
+    'guardian.backends.ObjectPermissionBackend',
+)
+
+AUTH_LDAP_USER_ATTR_MAP = {
+    "first_name": "cn",
+    "last_name": "sn",
+    "username": "uid",
+    "email": "mail"
+}
+
+
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
+# Database
+# https://docs.djangoproject.com/en/1.8/ref/settings/#databases
 
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/1.8/howto/deployment/checklist/
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': os.path.join(BASE_DIR, 'db.sqlite3'),
+    }
+}
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 't&f&k54m3j^*vm8wgc2r&$aq47&dq-(b!!9tng))r2#zzr&un%'
+DATETIME_FORMAT = 'P d.n.'
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
+DEFAULT_FROM_EMAIL = "admin@labshare.labshare"
 
-ALLOWED_HOSTS = []
-ADMINS = ()
+EMAIL_BACKEND = 'labshare.backends.mail.open_smtp.OpenSMTPBackend'
+EMAIL_HOST = "localhost"
+EMAIL_PORT = "25"
 
-
-# Application definition
+HIJACK_USE_BOOTSTRAP = True
 
 INSTALLED_APPS = (
     'django.contrib.admin',
@@ -30,7 +53,12 @@ INSTALLED_APPS = (
     'labshare',
     'bootstrap3',
     'guardian',
+    'hijack',
+    'compat',
 )
+
+LANGUAGE_CODE = 'en-us'
+LOGIN_REDIRECT_URL = "/"
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -43,6 +71,19 @@ MIDDLEWARE = [
 ]
 
 ROOT_URLCONF = 'urls'
+
+# SECURITY WARNING: keep the secret key used in production secret!
+SECRET_KEY = 't&f&k54m3j^*vm8wgc2r&$aq47&dq-(b!!9tng))r2#zzr&un%'
+
+SITE_ID = 1
+
+STATICFILES_DIRS = (
+    os.path.join(BASE_DIR, "static"),
+)
+
+# Static files (CSS, JavaScript, Images)
+# https://docs.djangoproject.com/en/1.8/howto/static-files/
+STATIC_URL = '/static/'
 
 TEMPLATES = [
     {
@@ -64,60 +105,12 @@ TEMPLATES = [
     },
 ]
 
-STATICFILES_DIRS = (
-    os.path.join(BASE_DIR, "static"),
-)
-
-# Database
-# https://docs.djangoproject.com/en/1.8/ref/settings/#databases
-
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': os.path.join(BASE_DIR, 'db.sqlite3'),
-    }
-}
-
-AUTHENTICATION_BACKENDS = (
-    'django.contrib.auth.backends.ModelBackend', # this is default
-    'labshare.backends.authentication.ldap.LDAPBackend',
-    'guardian.backends.ObjectPermissionBackend',
-)
-
-AUTH_LDAP_USER_ATTR_MAP = {
-    "first_name": "cn",
-    "last_name": "sn",
-    "username": "uid",
-    "email": "mail"
-}
-
-EMAIL_BACKEND = 'labshare.backends.mail.open_smtp.OpenSMTPBackend'
-EMAIL_HOST = "localhost"
-EMAIL_PORT = "25"
-DEFAULT_FROM_EMAIL = "admin@labshare.labshare"
-
-# Internationalization
-# https://docs.djangoproject.com/en/1.8/topics/i18n/
-
-LANGUAGE_CODE = 'en-us'
 
 TIME_ZONE = 'CET'
-DATETIME_FORMAT = 'P d.n.'
 
 USE_I18N = True
-
 USE_L10N = False
-
 USE_TZ = True
-
-LOGIN_REDIRECT_URL = "/"
-
-SITE_ID = 1
-
-# Static files (CSS, JavaScript, Images)
-# https://docs.djangoproject.com/en/1.8/howto/static-files/
-
-STATIC_URL = '/static/'
 
 # Create a localsettings.py to override settings per machine or user, e.g. for
 # development or different settings in deployments using multiple servers.

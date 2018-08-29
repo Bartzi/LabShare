@@ -9,7 +9,7 @@ from django.http import HttpResponseRedirect, HttpResponseBadRequest, HttpRespon
 from django.shortcuts import get_object_or_404
 from django.urls import reverse
 
-from .forms import DeviceSelectForm, MessageForm
+from .forms import DeviceSelectForm, MessageForm, ViewAsForm
 from labshare.utils import send_reservation_mail_for, send_gpu_done_mail, login_required_ajax
 from .models import Device, Reservation, GPU
 from labshare.decorators import render_to
@@ -202,4 +202,14 @@ def send_message(request):
         messages.success(request, "Message sent!")
         return HttpResponseRedirect(reverse("index"))
 
+    return {"form": form}
+
+
+@login_required
+@render_to("view_as.html")
+def view_as(request):
+    if not request.user.is_superuser:
+        raise PermissionDenied
+
+    form = ViewAsForm()
     return {"form": form}

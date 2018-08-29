@@ -25,3 +25,7 @@ class MessageForm(forms.Form):
     )
     subject = forms.CharField(required=True)
     message = forms.CharField(widget=forms.Textarea, required=True)
+
+
+class ViewAsForm(forms.Form):
+    username = forms.ModelChoiceField(queryset=User.objects.all(), empty_label="Select a user", required=True)
