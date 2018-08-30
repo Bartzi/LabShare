@@ -7,7 +7,9 @@ Django Tool that helps everyone to get their fair share of GPU time.
 1. clone repository
 2. install requirements with `pip install -r requirements.txt` (make sure to use python 3!)
 3. create database by running `python manage.py migrate`
-4. run the test server with `python manage.py runserver`
+4. Install [Yarn](https://yarnpkg.com/en/docs/install)
+4. go into folder `static` and run `yarn` or `yarn install` to install all front end libraries.
+5. run the test server with `python manage.py runserver`
 
 ## Usage
 
