@@ -6,10 +6,7 @@
 
 {% block extra_css %}
     <!-- DataTables CSS -->
-    <link href="{% static "DataTables-1.10.9/css/dataTables.bootstrap.min.css" %}" rel="stylesheet">
-
-    <!-- DataTables Responsive CSS -->
-    <link href="{% static "Responsive-1.0.7/css/responsive.bootstrap.min.css" %}" rel="stylesheet">
+    <link href="{% static "node_modules/datatables.net-bs/css/dataTables.bootstrap.min.css" %}" rel="stylesheet">
 {% endblock %}
 
 {% block content %}
@@ -83,9 +80,8 @@
 {% block scripts %}
     {{ block.super }}
     <!-- DataTables JavaScript -->
-    <script src="{% static "DataTables-1.10.9/js/jquery.dataTables.min.js" %}"></script>
-    <script src="{% static "DataTables-1.10.9/js/dataTables.bootstrap.min.js" %}"></script>
-    <script src="{% static "Responsive-1.0.7/js/dataTables.responsive.min.js" %}"></script>
+    <script src="{% static "node_modules/datatables.net/js/jquery.dataTables.min.js" %}"></script>
+    <script src="{% static "node_modules/datatables.net-bs/js/dataTables.bootstrap.min.js" %}"></script>
 
      <script>
      function refreshPage() {

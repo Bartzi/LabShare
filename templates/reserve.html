@@ -95,7 +95,7 @@
         function update_gpu_info() {
             var selectedGPU = gpuSelect.find(":selected").val();
 
-            if (typeof selectedGPU == "undefined") {
+            if (typeof selectedGPU === "undefined") {
                 gpuInfo.addClass("hidden");
                 return;
             }
@@ -113,11 +113,11 @@
         var gpuInfo = $('#gpu-info');
         get_gpus(deviceSelect, gpuSelect);
 
-        deviceSelect.change(function() {
+        deviceSelect.on('change', function() {
             get_gpus(deviceSelect, gpuSelect);
         });
 
-        gpuSelect.change(function() {
+        gpuSelect.on('change',  function() {
             update_gpu_info();
         });
 

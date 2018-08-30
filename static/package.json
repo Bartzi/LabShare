@@ -1,0 +1,18 @@
+{
+  "name": "Labshare",
+  "version": "1.0.0",
+  "description": "A tool for everyone to get their fair share of gpu time",
+  "main": " ",
+  "repository": "https://github.com/Bartzi/LabShare",
+  "author": "Christian Bartz",
+  "license": "GPLv2",
+  "private": true,
+  "dependencies": {
+    "add": "^2.0.6",
+    "bootstrap": "^3.3.7",
+    "datatables.net-bs": "^1.10.19",
+    "jquery": "^3.3.1",
+    "select2": "^4.0.6-rc.1",
+    "yarn": "^1.9.4"
+  }
+}
