@@ -10,7 +10,7 @@ from django.shortcuts import get_object_or_404
 from django.urls import reverse
 
 from .forms import DeviceSelectForm, MessageForm, ViewAsForm
-from labshare.utils import send_reservation_mail_for, send_gpu_done_mail, login_required_ajax
+from labshare.utils import send_reservation_mail_for, send_gpu_done_mail, login_required_ajax, publish_device_state
 from .models import Device, Reservation, GPU
 from labshare.decorators import render_to
 
@@ -28,8 +28,8 @@ def reserve(request):
 
     form = DeviceSelectForm(request.POST or None, devices=accessible_devices)
     if form.is_valid():
-        if json.loads(form.data["next-available-spot"]):
-            device = Device.objects.get(name=form.data["device"])
+        device = Device.objects.get(name=form.data["device"])
+        if json.loads(form.data.get("next-available-spot", "false")):
             if not device.can_be_used_by(request.user):
                 raise PermissionDenied
             # first check whether a gpu is already available on that given machine
@@ -53,6 +53,9 @@ def reserve(request):
             reservation.save()
 
             send_reservation_mail_for(request, gpu)
+
+        # notify our users of this change for this device
+        publish_device_state(device)
 
         return HttpResponseRedirect(reverse("index"))
 
@@ -143,8 +146,9 @@ def gpu_done(request, gpu_id):
                 reservation.delete()
 
         send_gpu_done_mail(request, gpu, current_reservation)
+    publish_device_state(gpu.device)
 
-    return HttpResponseRedirect(reverse("index"))
+    return HttpResponseRedirect(reverse('index'))
 
 
 @login_required
@@ -159,10 +163,11 @@ def gpu_cancel(request, gpu_id):
     try:
         reservation = gpu.reservations.filter(user=request.user).latest("time_reserved")
         reservation.delete()
+        publish_device_state(gpu.device)
     except ObjectDoesNotExist as e:
         raise Http404
 
-    return HttpResponseRedirect(reverse("index"))
+    return HttpResponseRedirect(reverse('index'))
 
 
 @login_required
