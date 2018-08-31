@@ -1,8 +1,8 @@
 {% extends "base.html" %}
 
 {% load staticfiles %}
-{% load reservations processes %}
 {% load icon %}
+{% load bootstrap3 %}
 
 {% block extra_css %}
     <!-- DataTables CSS -->
@@ -10,13 +10,7 @@
 {% endblock %}
 
 {% block content %}
-    {% for device in devices %}
-        {% for gpu in device.gpus.all %}
-            {% render_process_list gpu.id gpu.processes.all %}
-        {% endfor %}
-    {% endfor %}
-
-    <div class="col-lg-12">
+    <div class="col-lg-12" id="gpu-overview">
         <div class="panel panel-default">
             <div class="panel-body">
                 <table class="table table-hover" id="overview-table">
@@ -29,43 +23,50 @@
                             <th>Last Update</th>
                             <th>Current</th>
                             <th>Next</th>
-                            <th title="People in the queue in front of you">Queue {% icon question-sign %}</th>
                             <th></th>
                         </tr>
                     </thead>
                     <tbody style="background-color: #fff;">
                         {% for device in devices %}
                             {% for gpu in device.gpus.all %}
-                                <tr {% if gpu.in_use %}class="warning"{% endif %}>
+                                <tr id="{{ gpu.uuid }}" {% if gpu.in_use %}class="warning"{% endif %}>
                                     <td>{{ device.name }}</td>
                                     <td>{{ gpu.model_name }}</td>
-                                    <td>{{ gpu.used_memory }} / {{ gpu.total_memory }}</td>
-                                    <td>
-                                        {% with count=gpu.processes.count %}
-                                            <button class="btn btn-xs btn-info" {% if count == 0 %}disabled{% endif %} data-toggle="modal" data-target="#gpu-proc-list-{{ gpu.id }}">
-                                                {{ count }} Process{{ count|pluralize:"es" }}
-                                            </button>
-                                        {% endwith %}
+                                    <td class="gpu-memory">- MiB / - MiB</td>
+                                    <td class="gpu-processes">
+                                        <button class="gpu-process-show btn btn-xs btn-info" disabled data-device="{{ device.name }}" data-gpu-uuid="{{ gpu.uuid }}">0 Processes</button>
                                     </td>
-                                    <td>{{ gpu.last_updated }}{% if gpu.marked_as_failed %} {% icon exclamation-sign %} {% endif %}</td>
-                                    <td>{{ gpu|current_reservation }}</td>
-                                    <td>{{ gpu|next_reservation }}</td>
-                                    {% with queue_position=gpu|queue_position:user %}
-                                        <td>{{ queue_position|default_if_none:"--" }}</td>
-                                        <td>
-                                            {% if user.is_authenticated %}
-                                                {% if gpu|current_reservation == user %}
-                                                    <a class="btn btn-xs btn-success" href="{% url "done_with_gpu" gpu.id %}">Done</a>
-                                                {% elif queue_position %}
-                                                    <a class="btn btn-xs btn-danger" href="{% url "cancel_gpu" gpu.id %}">Cancel</a>
-                                                {% else %}
-                                                    <button class="btn btn-xs btn-warning reserve-btn" data-gpu="{{ gpu.uuid }}" data-device="{{ device.name }}">
-                                                    Reserve
-                                                    </button>
-                                                {% endif %}
-                                            {% endif %}
-                                        </td>
-                                    {% endwith %}
+                                    <td class="gpu-last-update">--</td>
+                                    <td class="gpu-current-reservation"></td>
+                                    <td class="gpu-next-reservation"></td>
+                                    <td class="gpu-actions">
+                                        <span class="gpu-done-button hidden">
+                                            <form action="{% url "done_with_gpu" gpu.id %}" method="post">
+                                                {% csrf_token %}
+                                                {% buttons %}
+                                                    <button type="submit" class="btn btn-xs btn-success">Done</button>
+                                                {% endbuttons %}
+                                            </form>
+                                        </span>
+                                        <span class="gpu-cancel-button hidden">
+                                            <form action="{% url "cancel_gpu" gpu.id %}" method="post">
+                                                {% csrf_token %}
+                                                {% buttons %}
+                                                    <button type="submit" class="btn btn-xs btn-danger">Cancel</button>
+                                                {% endbuttons %}
+                                            </form>
+                                        </span>
+                                        <span class="gpu-reserve-button">
+                                            <form action="{% url "reserve" %}" method="post">
+                                                {% csrf_token %}
+                                                <input type="hidden" value="{{ gpu.uuid }}" name="gpu">
+                                                <input type="hidden" value="{{ device.name }}" name="device">
+                                                {% buttons %}
+                                                    <button type="submit" class="btn btn-xs btn-warning">Reserve</button>
+                                                {% endbuttons %}
+                                            </form>
+                                        </span>
+                                    </td>
                                 </tr>
                             {% endfor %}
                         {% endfor %}
@@ -75,6 +76,11 @@
         </div>
     </div>
     <!-- /.row -->
+
+    <div id="templates" class="hidden">
+        {% include "process_list_base.html" %}
+        {% include "process_list_body.html" %}
+    </div>
 {% endblock %}
 
 {% block scripts %}
@@ -82,20 +88,107 @@
     <!-- DataTables JavaScript -->
     <script src="{% static "node_modules/datatables.net/js/jquery.dataTables.min.js" %}"></script>
     <script src="{% static "node_modules/datatables.net-bs/js/dataTables.bootstrap.min.js" %}"></script>
+    <script src="{% static "node_modules/reconnectingwebsocket/reconnecting-websocket.min.js" %}"></script>
+    <script src="{% static "node_modules/pluralize/pluralize.js" %}"></script>
 
-     <script>
-     function refreshPage() {
-         window.location.reload(true);
-         setTimeout(refreshPage, 300000);
-     }
+    <script>
+    const deviceNames = [{% for device in devices %}"{{ device.name }}"{% if not forloop.last %},{% endif %}{% endfor %}];
+    const currentUser = "{{ user.username }}";
+    const webSocketMethod = window.location.protocol === "https:" ? "wss" : "ws";
+    const deviceData = {};
+
+    function showCorrectButton(gpuRow, gpuData) {
+        gpuRow.find("span[class*='-button']").addClass('hidden');
+        let button;
+        if (gpuData.current_user === currentUser) {
+            // the user that is viweing this page has reserved this gpu
+            button = gpuRow.find('.gpu-done-button');
+        } else if (gpuData.next_users.includes(currentUser)) {
+            // the user is in the queue, so he should be able to cancel his reservation
+            button = gpuRow.find('.gpu-cancel-button');
+        } else {
+            // user does not have a reservation yet, so he should be able to reserve a spot
+            button = gpuRow.find('.gpu-reserve-button');
+        }
+        button.removeClass('hidden');
+    }
+
+    function updateGPUData(data) {
+        for (let gpu of data.gpus) {
+            const gpuRow = $('#' + gpu.uuid);
+            gpuRow.find('.gpu-memory').html(gpu.memory);
+            gpuRow.find('.gpu-last-update').html(gpu.last_update);
+            gpuRow.find('.gpu-current-reservation').html(gpu.current_user);
+            gpuRow.find('.gpu-next-reservation').html(gpu.next_users.length > 0 ? gpu.next_users[0] : '');
+
+            const numGPUProcesses = gpu.processes.length;
+            const processButton = gpuRow.find('.gpu-processes').find('.gpu-process-show');
+            processButton.html(
+                numGPUProcesses + " " + pluralize("Process", numGPUProcesses)
+            );
+            processButton.prop("disabled", numGPUProcesses === 0);
+
+            if (gpu.in_use) {
+                gpuRow.addClass("warning");
+            }
+            if (gpu.failed) {
+                gpuRow.addClass("danger");
+            }
+            showCorrectButton(gpuRow, gpu);
+        }
+    }
+
+    $(document).on('hide.bs.modal', '#full-process-list', function (event) {
+        $(event.target).remove();
+    });
 
      $(document).ready(function() {
+         for (let device of deviceNames) {
+             const socket = new ReconnectingWebSocket(webSocketMethod + "://" + window.location.host + '/ws/device/' + device + '/');
+             socket.device_name = device;
+             socket.addEventListener('open', function (event) {
+                 console.log("Opening Socket " + socket.device_name);
+             });
+             socket.addEventListener('close', function (event) {
+                 console.log("Closing socket " + socket.device_name);
+                 delete deviceData[socket.device_name];
+             });
+             socket.addEventListener('error', function (event) {
+                 console.log("Error while opening Websocket" + event);
+             });
+             socket.addEventListener('message', function (event) {
+                 const data = JSON.parse(event.data);
+                 deviceData[socket.device_name] = data;
+                 updateGPUData(data);
+                 console.log(data);
+             });
+         }
+
+         $('.gpu-process-show').on('click', function (event) {
+             const that = $(this);
+             const device = that.data('device');
+             const uuid = that.data('gpu-uuid');
+             const gpu = deviceData[device].gpus.filter(gpu => gpu.uuid === uuid)[0];
+             const processes = gpu.processes;
+             const gpuModal = $('#gpu-proc-list').clone().attr('id', 'full-process-list');
+             const modalBody = gpuModal.find('.modal-body');
+             for (const process of processes) {
+                 $('.gpu-process-details').clone()
+                     .find('.panel-heading').html(process.name).end()
+                     .find('.pid').html(process.pid).end()
+                     .find('.user').html(process.username).end()
+                     .find('.memory').html(process.memory_usage).end()
+                     .appendTo(modalBody);
+             }
+             gpuModal.modal('show');
+         });
+
          $('#overview-table').DataTable({
              responsive: true,
              paging: false,
              dom: 'ti',
              "columnDefs": [
-                 {"orderable": false, "targets": [3, 7, 8]}
+                 {"orderable": false, "targets": [3, 7]}
              ]
          });
 
@@ -112,8 +205,6 @@
               alert( "Error, reservation failed. Please contact maintainers." );
             });
          });
-
-         setTimeout(refreshPage, 300000);
      });
 
     </script>

@@ -4,6 +4,8 @@ import os
 ADMINS = ()
 ALLOWED_HOSTS = []
 
+ASGI_APPLICATION = "labshare.routing.application"
+
 AUTHENTICATION_BACKENDS = (
     'django.contrib.auth.backends.ModelBackend', # this is default
     'labshare.backends.authentication.ldap.LDAPBackend',
@@ -18,7 +20,18 @@ AUTH_LDAP_USER_ATTR_MAP = {
 }
 
 
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels_redis.core.RedisChannelLayer',
+        'CONFIG': {
+            "hosts": [('127.0.0.1', 6379)],
+        },
+    },
+}
+
+
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
 
 # Database
 # https://docs.djangoproject.com/en/1.8/ref/settings/#databases
@@ -27,6 +40,9 @@ DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': os.path.join(BASE_DIR, 'db.sqlite3'),
+        'TEST': {
+            'NAME': os.path.join(BASE_DIR, 'db-test.sqlite3'),
+        }
     }
 }
 
@@ -53,6 +69,7 @@ INSTALLED_APPS = (
     'labshare',
     'bootstrap3',
     'guardian',
+    'channels',
     'hijack',
     'compat',
 )

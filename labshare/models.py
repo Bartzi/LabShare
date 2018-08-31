@@ -23,6 +23,12 @@ class Device(models.Model):
         permission_name = "{app}.use_{model}".format(app=content_type.app_label, model=content_type.model)
         return user.has_perm(permission_name, self) or user.has_perm(permission_name)
 
+    def serialize(self):
+        return {
+            'name': self.name,
+            'gpus': [gpu.serialize() for gpu in self.gpus.all()]
+        }
+
 
 class GPU(models.Model):
     uuid = models.CharField(unique=True, max_length=255)
@@ -52,6 +58,39 @@ class GPU(models.Model):
         except Reservation.DoesNotExist as e:
             return None
 
+    def get_next_reservations(self):
+        reservations = self.reservations.all()
+        if self.reservations.count() <= 1:
+            return []
+        return reservations.order_by("time_reserved").all()[1:]
+
+    def get_current_reservation(self):
+        if self.reservations.count() == 0:
+            return None
+        return self.current_reservation()
+
+    def get_current_user(self):
+        return getattr(self.get_current_reservation(), 'user', None)
+
+    def get_next_users(self):
+        return [getattr(reservation, 'user', '') for reservation in self.get_next_reservations()]
+
+    def memory_usage(self):
+        return "{used} / {total}".format(used=self.used_memory, total=self.total_memory)
+
+    def serialize(self):
+        return {
+            'name': self.model_name,
+            'uuid': self.uuid,
+            'memory': self.memory_usage(),
+            'processes': [process.serialize() for process in self.processes.all()],
+            'last_update': self.last_updated.strftime("%H:%M %d.%m"),
+            'failed': self.marked_as_failed,
+            'in_user': self.in_use,
+            'current_user': getattr(self.get_current_user(), 'username', ''),
+            'next_users': [getattr(user, 'username', '') for user in self.get_next_users()]
+        }
+
 
 class GPUProcess(models.Model):
     gpu = models.ForeignKey(GPU, related_name="processes", on_delete=models.CASCADE)
@@ -67,6 +106,14 @@ class GPUProcess(models.Model):
             gpu=self.gpu,
             memory=self.memory_usage,
         )
+
+    def serialize(self):
+        return {
+            'name': self.name,
+            'pid': self.pid,
+            'memory_usage': self.memory_usage,
+            'username': self.username,
+        }
 
 
 class Reservation(models.Model):

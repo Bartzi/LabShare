@@ -1,6 +1,9 @@
 import sys
+
+import channels.layers
 import json
 import urllib.request
+from asgiref.sync import async_to_sync
 from django.conf import settings
 
 from django.core.mail import send_mail, EmailMessage
@@ -41,20 +44,6 @@ def send_gpu_done_mail(request, gpu, reservation):
         settings.DEFAULT_FROM_EMAIL,
         email_addresses,
     )
-
-
-def get_current_reservation(gpu):
-    reservations = gpu.reservations.all()
-    if len(reservations) == 0:
-        return ""
-    return reservations.order_by("time_reserved").first().user
-
-
-def get_next_reservation(gpu):
-    reservations = gpu.reservations.all()
-    if len(reservations) <= 1:
-        return ""
-    return reservations.order_by("time_reserved").all()[1].user
 
 
 def login_required_ajax(function=None, redirect_field_name=None):
@@ -132,8 +121,8 @@ def determine_failed_gpus():
         # 1. gather all email addresses
         admin_emails = [data[1] for data in settings.ADMINS]
 
-        current_user = get_current_reservation(failed_gpu)
-        if current_user != "":
+        current_user = failed_gpu.get_current_user()
+        if current_user is not None:
             current_user_emails = [address.email for address in current_user.email_addresses.all()]
             current_user_emails.append(current_user.email)
         else:
@@ -153,3 +142,21 @@ def determine_failed_gpus():
         # 3. mark gpu as failed and inhibit further emails
         failed_gpu.marked_as_failed = True
         failed_gpu.save(update_fields=["marked_as_failed"])
+
+
+def publish_device_state(device, channel_name=None):
+    channel_layer = channels.layers.get_channel_layer()
+    name = device.name
+    device_data = device.serialize()
+    if channel_name is None:
+        send_function = async_to_sync(channel_layer.group_send)
+    else:
+        send_function = async_to_sync(channel_layer.send)
+    send_function(channel_name if channel_name else name, {'type': 'update_info', 'message': json.dumps(device_data)})
+
+
+def publish_gpu_states():
+    devices = Device.objects.all()
+
+    for device in devices:
+        publish_device_state(device)
