@@ -3,7 +3,7 @@ import json
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
-from django.core.exceptions import ObjectDoesNotExist, PermissionDenied
+from django.core.exceptions import ObjectDoesNotExist, PermissionDenied, SuspiciousOperation
 from django.core.mail import EmailMessage
 from django.http import HttpResponseRedirect, HttpResponseBadRequest, HttpResponse, HttpResponseForbidden, Http404
 from django.shortcuts import get_object_or_404
@@ -62,11 +62,11 @@ def reserve(request):
 @login_required_ajax
 def gpus(request):
     if request.method != "GET" or not request.is_ajax():
-        return HttpResponseBadRequest()
+        raise SuspiciousOperation
 
     device_name = request.GET.get('device_name', None)
     if device_name is None:
-        return HttpResponseBadRequest()
+        raise Http404
 
     device = Device.objects.get(name=device_name)
     if not device.can_be_used_by(request.user):
@@ -83,11 +83,11 @@ def gpus(request):
 @login_required_ajax
 def gpu_info(request):
     if request.method != "GET" or not request.is_ajax():
-        return HttpResponseBadRequest()
+        raise SuspiciousOperation
 
     uuid = request.GET.get('uuid', None)
     if uuid is None:
-        return HttpResponseBadRequest()
+        raise Http404
 
     gpu = GPU.objects.get(uuid=uuid)
 
@@ -109,6 +109,9 @@ def gpu_info(request):
 def gpu_done(request, gpu_id):
     gpu = get_object_or_404(GPU, pk=gpu_id)
 
+    if request.method != "POST":
+        raise SuspiciousOperation
+
     if not gpu.device.can_be_used_by(request.user):
         raise PermissionDenied
 
@@ -118,7 +121,7 @@ def gpu_done(request, gpu_id):
         raise Http404
 
     if current_reservation.user != request.user:
-        return HttpResponseForbidden()
+        raise PermissionDenied
 
     current_reservation.delete()
 
@@ -147,6 +150,8 @@ def gpu_done(request, gpu_id):
 @login_required
 def gpu_cancel(request, gpu_id):
     gpu = get_object_or_404(GPU, pk=gpu_id)
+    if request.method != "POST":
+        raise SuspiciousOperation
 
     if not gpu.device.can_be_used_by(request.user):
         raise PermissionDenied
@@ -172,7 +177,7 @@ def send_message(request):
         bcc_addresses = []
         if form.cleaned_data.get('message_all_users'):
             if not request.user.is_staff:
-                return HttpResponseBadRequest()
+                raise SuspiciousOperation
             users = User.objects.exclude(id=sender.id)
             bcc_addresses = [user.email for user in users]
             bcc_addresses.extend([address.email for user in users for address in user.email_addresses.all()])
