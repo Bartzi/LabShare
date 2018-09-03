@@ -2,6 +2,7 @@ import datetime
 import io
 import json
 import mock as mock
+import os
 import random
 import string
 from channels.testing import ChannelsLiveServerTestCase
@@ -21,6 +22,7 @@ from selenium.common.exceptions import NoSuchElementException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.wait import WebDriverWait
+from unittest import skipIf
 from unittest.mock import Mock
 from urllib.error import URLError
 
@@ -1174,6 +1176,7 @@ class FrontendTestsBase(ChannelsLiveServerTestCase):
         self.driver.switch_to_window(self.driver.window_handles[window_id])
 
 
+@skipIf("TRAVIS" in os.environ and os.environ["TRAVIS"] == "true", "Skipping this test on Travis CI.")
 class FrontendOverviewDataTest(FrontendTestsBase):
 
     def test_overview_gpu_data_correct(self):
@@ -1232,6 +1235,7 @@ class FrontendOverviewDataTest(FrontendTestsBase):
                     )
 
 
+@skipIf("TRAVIS" in os.environ and os.environ["TRAVIS"] == "true", "Skipping this test on Travis CI.")
 class FrontendOverviewNonSuperuserTest(FrontendTestsBase):
 
     def setUp(self):
@@ -1247,6 +1251,7 @@ class FrontendOverviewNonSuperuserTest(FrontendTestsBase):
             self.assertRaises(NoSuchElementException, self.driver.find_element_by_id, gpu.uuid)
 
 
+@skipIf("TRAVIS" in os.environ and os.environ["TRAVIS"] == "true", "Skipping this test on Travis CI.")
 class FrontendOverviewDoneButtonTest(FrontendTestsBase):
 
     def test_overview_done_button(self):
@@ -1262,6 +1267,7 @@ class FrontendOverviewDoneButtonTest(FrontendTestsBase):
         self.assertEqual(Reservation.objects.filter(user=self.staff_user).count(), num_reservations_for_user - 1)
 
 
+@skipIf("TRAVIS" in os.environ and os.environ["TRAVIS"] == "true", "Skipping this test on Travis CI.")
 class FrontendOverviewCancelButtonTest(FrontendTestsBase):
 
     def test_overview_cancel_button(self):
@@ -1277,6 +1283,7 @@ class FrontendOverviewCancelButtonTest(FrontendTestsBase):
         self.assertEqual(Reservation.objects.filter(user=self.staff_user).count(), num_reservations_for_user - 1)
 
 
+@skipIf("TRAVIS" in os.environ and os.environ["TRAVIS"] == "true", "Skipping this test on Travis CI.")
 class FrontendOverviewReserveButtonTest(FrontendTestsBase):
 
     def test_overview_cancel_button(self):
@@ -1292,6 +1299,7 @@ class FrontendOverviewReserveButtonTest(FrontendTestsBase):
         self.assertEqual(Reservation.objects.filter(user=self.staff_user).count(), num_reservations_for_user + 1)
 
 
+@skipIf("TRAVIS" in os.environ and os.environ["TRAVIS"] == "true", "Skipping this test on Travis CI.")
 class FrontendOverviewReserveSyncTest(FrontendTestsBase):
 
     def test_overview_button_sync(self):
@@ -1317,6 +1325,7 @@ class FrontendOverviewReserveSyncTest(FrontendTestsBase):
             self.close_all_new_windows()
 
 
+@skipIf("TRAVIS" in os.environ and os.environ["TRAVIS"] == "true", "Skipping this test on Travis CI.")
 class FrontendOverviewProcessListTest(FrontendTestsBase):
 
     @classmethod
