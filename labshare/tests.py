@@ -17,7 +17,6 @@ from urllib.error import URLError
 
 from labshare.models import Device, GPU, Reservation, GPUProcess, EmailAddress
 from labshare.templatetags.icon import icon
-from labshare.templatetags.reservations import queue_position
 from labshare.utils import get_devices, update_gpu_info, determine_failed_gpus
 
 
@@ -28,7 +27,7 @@ class TestLabshare(WebTest):
     @classmethod
     def setUpTestData(cls):
         cls.user = mommy.make(User)
-        cls.devices = mommy.make(Device, _quantity=3)
+        cls.devices = device_recipe.make(_quantity=3)
         mommy.make(GPU, device=cls.devices[0], _quantity=2, used_memory="12 Mib", total_memory="112 Mib")
         cls.gpu = mommy.make(GPU, device=cls.devices[1], used_memory="12 Mib", total_memory="112 Mib")
         mommy.make(GPU, device=cls.devices[-1], used_memory="12 Mib", total_memory="112 Mib")
@@ -45,29 +44,6 @@ class TestLabshare(WebTest):
 
         for device in self.devices:
             self.assertIn(device.name, response.body.decode('utf-8'))
-
-    def test_index_containing_reservations(self):
-        user1 = mommy.make(User)
-        user1.groups.add(self.group)
-        user2 = mommy.make(User)
-        user2.groups.add(self.group)
-        mommy.make(Reservation, gpu=self.devices[0].gpus.first(), user=self.user)
-        mommy.make(Reservation, gpu=self.devices[0].gpus.first(), user=user1)
-        mommy.make(Reservation, gpu=self.devices[1].gpus.first(), user=user2)
-
-        response = self.app.get(reverse("index"), user=self.user)
-        self.assertEqual(response.status_code, 200)
-
-        for reservation in Reservation.objects.all():
-            self.assertIn(reservation.user.username, response.body.decode('utf-8'))
-
-        user3 = mommy.make(User)
-        user3.groups.add(self.group)
-        mommy.make(Reservation, gpu=self.devices[0].gpus.first(), user=user3)
-
-        response = self.app.get(reverse("index"))
-        self.assertEqual(response.status_code, 200)
-        self.assertNotIn(user3.username, response.body.decode('utf-8'))
 
     def test_reserve_no_user(self):
         response = self.app.get(reverse("reserve"), expect_errors=True)
@@ -467,20 +443,6 @@ class TestLabshare(WebTest):
             user=reservation.user
         ))
 
-    def test_template_tag_position_in_queue(self):
-        gpu = self.devices[0].gpus.first()
-        other = mommy.make(User)
-        other.groups.add(self.group)
-        mommy.make(Reservation, gpu=gpu, user=other)
-        mommy.make(Reservation, gpu=gpu, user=self.user)
-
-        self.assertEqual(queue_position(gpu, self.user), 1)
-
-    def test_template_tag_position_in_queue_not_reserved(self):
-        gpu = self.devices[0].gpus.first()
-
-        self.assertIsNone(queue_position(gpu, self.user))
-
 
 class TestMessages(WebTest):
 
@@ -488,7 +450,7 @@ class TestMessages(WebTest):
 
     def setUp(self):
         self.user = mommy.make(User, is_superuser=True, is_staff=True, email="test@example.com")
-        self.devices = mommy.make(Device, _quantity=3)
+        self.devices = device_recipe.make(_quantity=3)
         mommy.make(GPU, device=self.devices[0], _quantity=2, used_memory="12 Mib", total_memory="112 Mib")
         mommy.make(GPU, device=self.devices[1], used_memory="12 Mib", total_memory="112 Mib")
         mommy.make(GPU, device=self.devices[-1], used_memory="12 Mib", total_memory="112 Mib")
@@ -653,7 +615,7 @@ class GPUProcessTests(WebTest):
     def setUp(self):
         self.user = mommy.make(User, is_superuser=True)
 
-        devices = mommy.make(Device, _quantity=3)
+        devices = device_recipe.make(_quantity=3)
         for idx, device in enumerate(devices):
             gpus = mommy.make(GPU, _quantity=2, device=device)
             for gpu in gpus:
@@ -661,34 +623,6 @@ class GPUProcessTests(WebTest):
                     mommy.make(GPUProcess, gpu=gpu, _quantity=2)
                 elif idx == 2:
                     mommy.make(GPUProcess, gpu=gpu)
-
-    def test_process_button_display(self):
-        response = self.app.get(reverse("index"), user=self.user)
-        self.assertEqual(response.status_code, 200)
-
-        response_body = response.body.decode('utf-8')
-        self.assertEqual(response_body.count("disabled"), 2)
-        self.assertEqual(response_body.count("1 Process"), 2)
-        self.assertEqual(response_body.count("2 Processes"), 2)
-
-    def test_process_overlay(self):
-        response = self.app.get(reverse("index"), user=self.user)
-        self.assertEqual(response.status_code, 200)
-
-        response_body = response.body.decode('utf-8')
-        for i in range(1, GPUProcess.objects.count() + 1):
-            self.assertIn('gpu-proc-list-{}'.format(i), response_body)
-
-    def test_process_info_in_response(self):
-        response = self.app.get(reverse("index"), user=self.user)
-        self.assertEqual(response.status_code, 200)
-
-        response_body = response.body.decode('utf-8')
-        for process in GPUProcess.objects.all():
-            self.assertIn("PID: {}".format(process.pid), response_body)
-            self.assertIn(process.name, response_body)
-            self.assertIn("User: {}".format(process.username), response_body)
-            self.assertIn("Memory Usage: {}".format(process.memory_usage), response_body)
 
     def test_gpu_process_string(self):
         for process in GPUProcess.objects.all():
@@ -708,7 +642,7 @@ class LabSharePermissionTests(WebTest):
     def setUp(self):
         self.staff_user = mommy.make(User)
         self.user = mommy.make(User)
-        self.devices = mommy.make(Device, _quantity=3)
+        self.devices = device_recipe.make(_quantity=3)
         mommy.make(GPU, device=self.devices[0], _quantity=2, used_memory="12 Mib", total_memory="112 Mib")
         mommy.make(GPU, device=self.devices[1], used_memory="12 Mib", total_memory="112 Mib")
         mommy.make(GPU, device=self.devices[-1], used_memory="12 Mib", total_memory="112 Mib")
@@ -925,7 +859,7 @@ def return_bytes_io(func):
 class UpdateGPUTests(TestCase):
 
     def setUp(self):
-        self.device = mommy.make(Device)
+        self.device = device_recipe.make()
 
     @mock.patch("urllib.request.urlopen", fail_url)
     def test_update_gpu_info_no_gpu_works(self):
