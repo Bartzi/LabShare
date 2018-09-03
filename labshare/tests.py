@@ -2,6 +2,9 @@ import datetime
 import io
 import json
 import mock as mock
+import random
+import string
+from channels.testing import ChannelsLiveServerTestCase
 from datetime import timedelta
 from django import template
 from django.contrib.auth.models import User, Group
@@ -12,12 +15,23 @@ from django_webtest import WebTest
 from guardian.shortcuts import assign_perm
 from guardian.utils import get_anonymous_user
 from model_mommy import mommy
+from model_mommy.recipe import Recipe
+from selenium import webdriver
+from selenium.common.exceptions import NoSuchElementException
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support.wait import WebDriverWait
 from unittest.mock import Mock
 from urllib.error import URLError
 
 from labshare.models import Device, GPU, Reservation, GPUProcess, EmailAddress
 from labshare.templatetags.icon import icon
 from labshare.utils import get_devices, update_gpu_info, determine_failed_gpus
+
+device_recipe = Recipe(
+    Device,
+    name=lambda: ''.join(random.choice(string.ascii_uppercase + string.ascii_lowercase + string.digits) for _ in range(16))
+)
 
 
 class TestLabshare(WebTest):
@@ -1080,3 +1094,267 @@ class HijackTests(WebTest):
         usernames = [u.username for u in User.objects.all()]
         for username in usernames:
             self.assertIn(username, body)
+
+
+class FrontendTestsBase(ChannelsLiveServerTestCase):
+    serve_static = True
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        try:
+            cls.driver = webdriver.Chrome()
+        except:
+            super().tearDownClass()
+            raise
+
+        cls.password = 'test'
+
+        cls.staff_user = mommy.make(User, is_superuser=True)
+        cls.staff_user.set_password(cls.password)
+        cls.staff_user.save()
+
+        cls.user = mommy.make(User)
+        cls.user.set_password(cls.password)
+        cls.user.save()
+
+        cls.device_1 = device_recipe.make()
+        gpus = mommy.make(GPU, device=cls.device_1, _quantity=3)
+        mommy.make(GPUProcess, gpu=gpus[0])
+        mommy.make(GPUProcess, gpu=gpus[1])
+        mommy.make(Reservation, user=cls.staff_user, gpu=gpus[0])
+        mommy.make(Reservation, user=cls.user, gpu=gpus[1])
+        mommy.make(Reservation, user=cls.staff_user, gpu=gpus[1])
+        assign_perm('labshare.use_device', cls.user, cls.device_1)
+
+        cls.device_2 = device_recipe.make()
+        gpus = mommy.make(GPU, device=cls.device_2, _quantity=2)
+        mommy.make(GPUProcess, gpu=gpus[0], _quantity=2)
+        mommy.make(Reservation, user=cls.staff_user, gpu=gpus[0])
+
+    def setUp(self):
+        self.login_user(self.staff_user.username)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.driver.quit()
+        super().tearDownClass()
+
+    def login_user(self, username):
+        if self.driver.get_cookie('sessionid') is not None:
+            return
+
+        login_success = self.client.login(username=username, password=self.password)
+        self.assertTrue(login_success)
+        session_cookie = self.client.cookies['sessionid']
+
+        self.driver.get(self.live_server_url + reverse('index'))
+        self.driver.add_cookie({'name': 'sessionid', 'value': session_cookie.value, 'secure': False, 'path': '/'})
+        self.driver.refresh()
+
+    def wait_for_page_load(self):
+        self.driver.refresh()
+        WebDriverWait(self.driver, 2).until(
+            lambda _: all(EC.presence_of_element_located((By.ID, gpu.uuid)) for gpu in GPU.objects.all()),
+            "Gpus did not show up on page, Websocket Connection not okay?"
+        )
+
+    def open_new_window(self):
+        self.driver.execute_script('window.open("about:blank", "_blank");')
+        self.driver.switch_to_window(self.driver.window_handles[-1])
+
+    def close_all_new_windows(self):
+        while len(self.driver.window_handles) > 1:
+            self.driver.switch_to_window(self.driver.window_handles[-1])
+            self.driver.execute_script('window.close();')
+        if len(self.driver.window_handles) == 1:
+            self.driver.switch_to_window(self.driver.window_handles[0])
+
+    def switch_to_window(self, window_id):
+        self.driver.switch_to_window(self.driver.window_handles[window_id])
+
+
+class FrontendOverviewDataTest(FrontendTestsBase):
+
+    def test_overview_gpu_data_correct(self):
+        self.wait_for_page_load()
+
+        for gpu in GPU.objects.all():
+            # 1. check that the elements look correct
+            element = self.driver.find_element_by_id(gpu.uuid)
+            memory_element = element.find_element_by_class_name("gpu-memory").text
+            self.assertEqual(memory_element, gpu.memory_usage())
+            current_reservation_element = element.find_element_by_class_name("gpu-current-reservation").text
+            current_user = gpu.get_current_user()
+            self.assertEqual(current_reservation_element, getattr(current_user, 'username', ''))
+            next_reservation_element = element.find_element_by_class_name("gpu-next-reservation").text
+            next_users = gpu.get_next_users()
+            self.assertEqual(next_reservation_element, next_users[0].username if len(next_users) > 0 else '')
+
+            # 2. check that the buttons are rendered correctly
+            buttons = element.find_element_by_class_name("gpu-actions")
+            hidden_elements = buttons.find_elements_by_class_name("hidden")
+            self.assertEqual(len(hidden_elements), 2)
+            current_reservation = gpu.get_current_reservation()
+            next_reservations = list(gpu.get_next_reservations())
+            for reservation in Reservation.objects.filter(gpu=gpu, user=self.staff_user):
+                if reservation == current_reservation:
+                    self.assertNotIn(
+                        "hidden",
+                        buttons.find_element_by_class_name("gpu-done-button").get_attribute("class")
+                    )
+                else:
+                    self.assertIn(
+                        "hidden",
+                        buttons.find_element_by_class_name("gpu-done-button").get_attribute("class")
+                    )
+
+                if reservation in next_reservations:
+                    self.assertNotIn(
+                        "hidden",
+                        buttons.find_element_by_class_name("gpu-cancel-button").get_attribute("class")
+                    )
+                else:
+                    self.assertIn(
+                        "hidden",
+                        buttons.find_element_by_class_name("gpu-cancel-button").get_attribute("class")
+                    )
+
+                if reservation != current_reservation and reservation not in next_reservations:
+                    self.assertNotIn(
+                        "hidden",
+                        buttons.find_element_by_class_name("gpu-reserve-button").get_attribute("class")
+                    )
+                else:
+                    self.assertIn(
+                        "hidden",
+                        buttons.find_element_by_class_name("gpu-reserve-button").get_attribute("class")
+                    )
+
+
+class FrontendOverviewNonSuperuserTest(FrontendTestsBase):
+
+    def setUp(self):
+        self.login_user(self.user.username)
+
+    def test_overview_table_populated_with_device_data_for_non_superuser(self):
+        WebDriverWait(self.driver, 2).until(
+            lambda _: all(EC.presence_of_element_located((By.ID, gpu.uuid)) for gpu in GPU.objects.filter(device=self.device_1)),
+            "Gpus did not show up on page, Websocket Connection not okay?"
+        )
+
+        for gpu in GPU.objects.filter(device=self.device_2):
+            self.assertRaises(NoSuchElementException, self.driver.find_element_by_id, gpu.uuid)
+
+
+class FrontendOverviewDoneButtonTest(FrontendTestsBase):
+
+    def test_overview_done_button(self):
+        self.wait_for_page_load()
+
+        num_reservations_for_user = Reservation.objects.filter(user=self.staff_user).count()
+        gpu = self.driver.find_element_by_id(self.device_1.gpus.first().uuid)
+        done_button = gpu.find_element_by_class_name("gpu-done-button")
+        self.assertNotIn("hidden", done_button.get_attribute("class"))
+        done_button.click()
+
+        self.wait_for_page_load()
+        self.assertEqual(Reservation.objects.filter(user=self.staff_user).count(), num_reservations_for_user - 1)
+
+
+class FrontendOverviewCancelButtonTest(FrontendTestsBase):
+
+    def test_overview_cancel_button(self):
+        self.wait_for_page_load()
+
+        num_reservations_for_user = Reservation.objects.filter(user=self.staff_user).count()
+        gpu = self.driver.find_element_by_id(list(self.device_1.gpus.all())[1].uuid)
+        cancel_button = gpu.find_element_by_class_name("gpu-cancel-button")
+        self.assertNotIn("hidden", cancel_button.get_attribute("class"))
+        cancel_button.click()
+
+        self.wait_for_page_load()
+        self.assertEqual(Reservation.objects.filter(user=self.staff_user).count(), num_reservations_for_user - 1)
+
+
+class FrontendOverviewReserveButtonTest(FrontendTestsBase):
+
+    def test_overview_cancel_button(self):
+        self.wait_for_page_load()
+
+        num_reservations_for_user = Reservation.objects.filter(user=self.staff_user).count()
+        gpu = self.driver.find_element_by_id(list(self.device_1.gpus.all())[2].uuid)
+        reserve_button = gpu.find_element_by_class_name("gpu-reserve-button")
+        self.assertNotIn("hidden", reserve_button.get_attribute("class"))
+        reserve_button.click()
+
+        self.wait_for_page_load()
+        self.assertEqual(Reservation.objects.filter(user=self.staff_user).count(), num_reservations_for_user + 1)
+
+
+class FrontendOverviewReserveSyncTest(FrontendTestsBase):
+
+    def test_overview_button_sync(self):
+        self.wait_for_page_load()
+        try:
+            self.open_new_window()
+            self.driver.get(self.live_server_url + reverse('index'))
+            self.wait_for_page_load()
+            self.switch_to_window(0)
+
+            # click the reserve button
+            gpu = self.driver.find_element_by_id(list(self.device_1.gpus.all())[2].uuid)
+            gpu.find_element_by_class_name("gpu-reserve-button").click()
+
+            # check that reservation appeared in new window
+            self.switch_to_window(1)
+            gpu = self.driver.find_element_by_id(list(self.device_1.gpus.all())[2].uuid)
+            reserve_button = gpu.find_element_by_class_name("gpu-reserve-button")
+            self.assertIn("hidden", reserve_button.get_attribute("class"))
+            done_button = gpu.find_element_by_class_name("gpu-done-button")
+            self.assertNotIn("hidden", done_button.get_attribute("class"))
+        finally:
+            self.close_all_new_windows()
+
+
+class FrontendOverviewProcessListTest(FrontendTestsBase):
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.driver.implicitly_wait(0.5)
+
+    def test_process_overview(self):
+        self.wait_for_page_load()
+        self.assertRaises(NoSuchElementException, self.driver.find_element_by_id, "full-process-list")
+
+        gpu = self.device_2.gpus.first()
+        gpu_row = self.driver.find_element_by_id(gpu.uuid)
+        process_show_button = gpu_row.find_element_by_class_name("gpu-process-show")
+        WebDriverWait(self.driver, 2).until(
+            lambda _: EC.element_to_be_clickable(process_show_button)
+        )
+        # self.assertFalse(process_show_button.get_property("disabled"))
+        self.assertRaises(NoSuchElementException, self.driver.find_element_by_id, "full-process-list")
+        process_show_button.click()
+
+        WebDriverWait(self.driver, 2).until(
+            lambda _: EC.visibility_of_element_located((By.ID, "full-process-list")),
+            "Modal did not open!"
+        )
+
+        process_list = self.driver.find_element_by_id("full-process-list")
+        process_details = process_list.find_elements_by_class_name("gpu-process-details")
+
+        for process_detail, process in zip(process_details, gpu.processes.all()):
+            process_name = process_detail.find_element_by_class_name("panel-heading").text
+            self.assertIn(process_name, process.name)
+
+            pid_text = process_detail.find_elements_by_class_name("list-group-item")[0].text
+            self.assertIn(str(process.pid), pid_text)
+
+            user_text = process_detail.find_elements_by_class_name("list-group-item")[1].text
+            self.assertIn(process.username, user_text)
+
+            memory_text = process_detail.find_elements_by_class_name("list-group-item")[2].text
+            self.assertIn(process.memory_usage, memory_text)
