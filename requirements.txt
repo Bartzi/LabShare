@@ -1,8 +1,11 @@
+channels >= git+https://github.com/django/channels.git@8771f6b59e05a218a6cae0e84e5708493d469b4f
+channels-redis >= 2.3.0
 django >= 2.0, < 2.1
-django-webtest >= 1.7.8
+django-auth-ldap >= 1.6.1
 django-bootstrap3 >= 5.4.0
+django-guardian >= 1.4.6
+django-hijack >= 2.1.10
+django-webtest >= 1.7.8
 model_mommy >= 1.2.6
 python-coveralls >= 2.5.0
-django-guardian >= 1.4.6
-django-auth-ldap >= 1.6.1
-django-hijack >= 2.1.10
+selenium >= 3.14.0
