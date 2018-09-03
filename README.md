@@ -6,6 +6,7 @@ Django Tool that helps everyone to get their fair share of GPU time.
 
 1. clone repository
 2. install requirements with `pip install -r requirements.txt` (make sure to use python 3!)
+3. start a redis server instance (you can use a docker container and start it ith the following command: `docker run -p 6379:6379 -d redis:2.8`)
 3. create database by running `python manage.py migrate`
 4. Install [Yarn](https://yarnpkg.com/en/docs/install)
 4. go into folder `static` and run `yarn` or `yarn install` to install all front end libraries.
