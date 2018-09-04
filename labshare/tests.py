@@ -5,6 +5,7 @@ import mock as mock
 import os
 import random
 import string
+from channels.layers import get_channel_layer
 from channels.testing import ChannelsLiveServerTestCase
 from datetime import timedelta
 from django import template
@@ -26,9 +27,10 @@ from unittest import skipIf
 from unittest.mock import Mock
 from urllib.error import URLError
 
+from labshare.consumers import GPUInfoUpdater
 from labshare.models import Device, GPU, Reservation, GPUProcess, EmailAddress
 from labshare.templatetags.icon import icon
-from labshare.utils import get_devices, update_gpu_info, determine_failed_gpus
+from labshare.utils import get_devices, update_gpu_info, determine_failed_gpus, publish_gpu_states, publish_device_state
 
 device_recipe = Recipe(
     Device,
@@ -1098,6 +1100,107 @@ class HijackTests(WebTest):
             self.assertIn(username, body)
 
 
+send_function_mock = mock.MagicMock()
+
+
+def async_to_sync_mock(func_name):
+    return send_function_mock
+
+
+class PublishMethodTests(TestCase):
+
+    def setUp(self):
+        self.device = device_recipe.make()
+        self.device_2 = device_recipe.make()
+        self.user = mommy.make(User)
+        assign_perm('labshare.use_device', self.user, self.device)
+
+        mommy.make(GPU, device=self.device, _quantity=2)
+        mommy.make(GPU, device=self.device_2, _quantity=2)
+
+    @mock.patch('labshare.utils.async_to_sync', async_to_sync_mock)
+    def test_publish_gpu_states(self):
+        publish_gpu_states()
+        for device in [self.device, self.device_2]:
+            data = {
+                'type': 'update_info',
+                'message': json.dumps(device.serialize()),
+            }
+
+            send_function_mock.assert_any_call(device.name, data)
+
+    @mock.patch('labshare.utils.async_to_sync', async_to_sync_mock)
+    def test_publish_device_state_without_channel_name(self):
+        publish_device_state(self.device)
+        data = {
+            'type': 'update_info',
+            'message': json.dumps(self.device.serialize()),
+        }
+
+        send_function_mock.assert_called_with(self.device.name, data)
+
+    @mock.patch('labshare.utils.async_to_sync', async_to_sync_mock)
+    def test_publish_device_state_without_channel_name(self):
+        channel_name = "kekse"
+        publish_device_state(self.device, channel_name=channel_name)
+        data = {
+            'type': 'update_info',
+            'message': json.dumps(self.device.serialize()),
+        }
+
+        send_function_mock.assert_called_with(channel_name, data)
+
+
+class ConsumerTests(TestCase):
+
+    def setUp(self):
+        self.device = device_recipe.make()
+        self.device_2 = device_recipe.make()
+        self.user = mommy.make(User)
+        assign_perm('labshare.use_device', self.user, self.device)
+
+        mommy.make(GPU, device=self.device, _quantity=2)
+        mommy.make(GPU, device=self.device_2, _quantity=2)
+
+        self.scope = {
+            "user": self.user,
+            "url_route": {
+                "kwargs": {
+                    "device_name": None
+                }
+            }
+        }
+
+        self.consumer = GPUInfoUpdater(self.scope)
+        self.consumer.channel_layer = get_channel_layer()
+        self.consumer.channel_name = "kekse"
+        self.mock_method = mock.MagicMock(return_value=None)
+        self.consumer.accept = self.mock_method
+
+    def test_consumer_no_permission(self):
+        self.consumer.scope['url_route']['kwargs']['device_name'] = self.device_2.name
+        self.consumer.connect()
+        self.mock_method.assert_not_called()
+
+    def test_consumer_permission(self):
+        self.consumer.scope['url_route']['kwargs']['device_name'] = self.device.name
+        self.consumer.connect()
+        self.mock_method.assert_called()
+
+    @mock.patch('labshare.consumers.async_to_sync', async_to_sync_mock)
+    def test_consumer_disconnect(self):
+        device_name = "Lorem-Device"
+        self.consumer.device_name = device_name
+        self.consumer.disconnect("lorem ipsum")
+        send_function_mock.assert_called_with(device_name, self.consumer.channel_name)
+
+    def test_consumer_update_info(self):
+        message = "Lorem Ipsum"
+        self.consumer.send = mock.MagicMock()
+        self.consumer.update_info({"message": message})
+        self.consumer.send.assert_called_with(text_data=message)
+
+
 class FrontendTestsBase(ChannelsLiveServerTestCase):
     serve_static = True
 
@@ -1301,6 +1404,11 @@ class FrontendOverviewReserveButtonTest(FrontendTestsBase):
 
 @skipIf("TRAVIS" in os.environ and os.environ["TRAVIS"] == "true", "Skipping this test on Travis CI.")
 class FrontendOverviewReserveSyncTest(FrontendTestsBase):
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.driver.implicitly_wait(0.5)
 
     def test_overview_button_sync(self):
         self.wait_for_page_load()
