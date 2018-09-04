@@ -308,7 +308,7 @@ class TestLabshare(WebTest):
         mommy.make(Reservation, gpu=gpu, user=self.user)
 
         response = self.app.post(reverse("done_with_gpu", args=[gpu.id]), user=self.user)
-        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.status_code, 200)
         self.assertEqual(Reservation.objects.count(), 0)
 
     def test_gpu_done_one_more_reservation(self):
@@ -316,7 +316,7 @@ class TestLabshare(WebTest):
         mommy.make(Reservation, _quantity=2, gpu=gpu, user=self.user, user_reserved_next_available_spot=False)
 
         response = self.app.post(reverse("done_with_gpu", args=[gpu.id]), user=self.user)
-        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.status_code, 200)
         self.assertEqual(Reservation.objects.count(), 1)
 
     def test_gpu_done_next_available_spot_reserved(self):
@@ -330,7 +330,7 @@ class TestLabshare(WebTest):
         self.assertEqual(Reservation.objects.count(), 4)
 
         response = self.app.post(reverse("done_with_gpu", args=[gpus.first().id]), user=self.user)
-        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.status_code, 200)
         self.assertEqual(Reservation.objects.count(), 2)
         self.assertEqual(gpus.first().reservations.count(), 1)
         self.assertEqual(gpus.first().reservations.first().user, user)
@@ -349,7 +349,7 @@ class TestLabshare(WebTest):
         self.assertEqual(Reservation.objects.count(), 5)
 
         response = self.app.post(reverse("done_with_gpu", args=[gpus.first().id]), user=self.user)
-        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.status_code, 200)
         self.assertEqual(Reservation.objects.count(), 3)
         self.assertEqual(gpus.first().reservations.count(), 1)
         self.assertEqual(gpus.first().reservations.first().user, user)
@@ -759,7 +759,7 @@ class LabSharePermissionTests(WebTest):
     def test_gpu_done(self):
         mommy.make(Reservation, gpu=self.devices[0].gpus.first(), user=self.user)
         response = self.app.post(reverse("done_with_gpu", args=[self.devices[0].gpus.first().id]), user=self.user)
-        self.assertRedirects(response, reverse("index"))
+        self.assertEqual(response.status_code, 200)
 
         mommy.make(Reservation, gpu=self.devices[-1].gpus.first(), user=self.staff_user)
         response = self.app.post(
@@ -771,7 +771,7 @@ class LabSharePermissionTests(WebTest):
         self.assertEqual(Reservation.objects.count(), 1)
 
         response = self.app.post(reverse("done_with_gpu", args=[self.devices[-1].gpus.first().id]), user=self.staff_user)
-        self.assertRedirects(response, reverse("index"))
+        self.assertEqual(response.status_code, 200)
 
         response = self.app.get(
             reverse("done_with_gpu", args=[self.devices[-1].gpus.first().id]),
@@ -783,7 +783,7 @@ class LabSharePermissionTests(WebTest):
     def test_gpu_cancel(self):
         mommy.make(Reservation, gpu=self.devices[0].gpus.first(), user=self.user)
         response = self.app.post(reverse("cancel_gpu", args=[self.devices[0].gpus.first().id]), user=self.user)
-        self.assertRedirects(response, reverse("index"))
+        self.assertEqual(response.status_code, 200)
 
         mommy.make(Reservation, gpu=self.devices[-1].gpus.first(), user=self.staff_user)
         response = self.app.post(reverse("cancel_gpu", args=[self.devices[-1].gpus.first().id]), user=self.user,
@@ -792,7 +792,7 @@ class LabSharePermissionTests(WebTest):
         self.assertEqual(Reservation.objects.count(), 1)
 
         response = self.app.post(reverse("cancel_gpu", args=[self.devices[-1].gpus.first().id]), user=self.staff_user)
-        self.assertRedirects(response, reverse("index"))
+        self.assertEqual(response.status_code, 200)
 
         response = self.app.get(
             reverse("cancel_gpu", args=[self.devices[-1].gpus.first().id]),
