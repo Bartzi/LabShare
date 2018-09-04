@@ -1,6 +1,6 @@
 from django.core.management import BaseCommand
 
-from labshare.utils import update_gpu_info, determine_failed_gpus
+from labshare.utils import update_gpu_info, determine_failed_gpus, publish_gpu_states
 
 
 class Command(BaseCommand):
@@ -9,4 +9,6 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         update_gpu_info()
         determine_failed_gpus()
+        publish_gpu_states()
+
 

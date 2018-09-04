@@ -1,8 +1,8 @@
 {% extends "base.html" %}
 
 {% load staticfiles %}
-{% load reservations processes %}
 {% load icon %}
+{% load bootstrap3 %}
 
 {% block extra_css %}
     <!-- DataTables CSS -->
@@ -10,13 +10,7 @@
 {% endblock %}
 
 {% block content %}
-    {% for device in devices %}
-        {% for gpu in device.gpus.all %}
-            {% render_process_list gpu.id gpu.processes.all %}
-        {% endfor %}
-    {% endfor %}
-
-    <div class="col-lg-12">
+    <div class="col-lg-12" id="gpu-overview">
         <div class="panel panel-default">
             <div class="panel-body">
                 <table class="table table-hover" id="overview-table">
@@ -29,43 +23,37 @@
                             <th>Last Update</th>
                             <th>Current</th>
                             <th>Next</th>
-                            <th title="People in the queue in front of you">Queue {% icon question-sign %}</th>
                             <th></th>
                         </tr>
                     </thead>
                     <tbody style="background-color: #fff;">
                         {% for device in devices %}
                             {% for gpu in device.gpus.all %}
-                                <tr {% if gpu.in_use %}class="warning"{% endif %}>
+                                <tr id="{{ gpu.uuid }}" {% if gpu.in_use %}class="warning"{% endif %}>
                                     <td>{{ device.name }}</td>
                                     <td>{{ gpu.model_name }}</td>
-                                    <td>{{ gpu.used_memory }} / {{ gpu.total_memory }}</td>
-                                    <td>
-                                        {% with count=gpu.processes.count %}
-                                            <button class="btn btn-xs btn-info" {% if count == 0 %}disabled{% endif %} data-toggle="modal" data-target="#gpu-proc-list-{{ gpu.id }}">
-                                                {{ count }} Process{{ count|pluralize:"es" }}
-                                            </button>
-                                        {% endwith %}
+                                    <td class="gpu-memory">- MiB / - MiB</td>
+                                    <td class="gpu-processes">
+                                        <button class="gpu-process-show btn btn-xs btn-info" disabled data-device="{{ device.name }}" data-gpu-uuid="{{ gpu.uuid }}">0 Processes</button>
                                     </td>
-                                    <td>{{ gpu.last_updated }}{% if gpu.marked_as_failed %} {% icon exclamation-sign %} {% endif %}</td>
-                                    <td>{{ gpu|current_reservation }}</td>
-                                    <td>{{ gpu|next_reservation }}</td>
-                                    {% with queue_position=gpu|queue_position:user %}
-                                        <td>{{ queue_position|default_if_none:"--" }}</td>
-                                        <td>
-                                            {% if user.is_authenticated %}
-                                                {% if gpu|current_reservation == user %}
-                                                    <a class="btn btn-xs btn-success" href="{% url "done_with_gpu" gpu.id %}">Done</a>
-                                                {% elif queue_position %}
-                                                    <a class="btn btn-xs btn-danger" href="{% url "cancel_gpu" gpu.id %}">Cancel</a>
-                                                {% else %}
-                                                    <button class="btn btn-xs btn-warning reserve-btn" data-gpu="{{ gpu.uuid }}" data-device="{{ device.name }}">
-                                                    Reserve
-                                                    </button>
-                                                {% endif %}
-                                            {% endif %}
-                                        </td>
-                                    {% endwith %}
+                                    <td class="gpu-last-update">--</td>
+                                    <td class="gpu-current-reservation"></td>
+                                    <td class="gpu-next-reservation"></td>
+                                    <td class="gpu-actions">
+                                        <span class="gpu-done-button hidden">
+                                            <button type="button" class="action-button btn btn-xs btn-success" data-action="{% url 'done_with_gpu' gpu.id %}">Done</button>
+                                        </span>
+                                        <span class="gpu-cancel-button hidden">
+                                            <button type="button" class="action-button btn btn-xs btn-danger" data-action="{% url 'cancel_gpu' gpu.id %}">Cancel</button>
+                                        </span>
+                                        <span class="gpu-reserve-button">
+                                            <button type="button" class="action-button btn btn-xs btn-warning"
+                                                    data-gpu="{{ gpu.uuid }}" data-device="{{ device.name }}"
+                                                    data-action="{% url 'reserve' %}">
+                                                Reserve
+                                            </button>
+                                        </span>
+                                    </td>
                                 </tr>
                             {% endfor %}
                         {% endfor %}
@@ -75,6 +63,11 @@
         </div>
     </div>
     <!-- /.row -->
+
+    <div id="templates" class="hidden">
+        {% include "process_list_base.html" %}
+        {% include "process_list_body.html" %}
+    </div>
 {% endblock %}
 
 {% block scripts %}
@@ -82,39 +75,26 @@
     <!-- DataTables JavaScript -->
     <script src="{% static "node_modules/datatables.net/js/jquery.dataTables.min.js" %}"></script>
     <script src="{% static "node_modules/datatables.net-bs/js/dataTables.bootstrap.min.js" %}"></script>
+    <script src="{% static "node_modules/reconnectingwebsocket/reconnecting-websocket.min.js" %}"></script>
+    <script src="{% static "node_modules/pluralize/pluralize.js" %}"></script>
 
-     <script>
-     function refreshPage() {
-         window.location.reload(true);
-         setTimeout(refreshPage, 300000);
-     }
+    <script type="module">
+        const deviceNames = [{% for device in devices %}"{{ device.name }}"{% if not forloop.last %},{% endif %}{% endfor %}];
+        const currentUser = "{{ user.username }}";
 
-     $(document).ready(function() {
-         $('#overview-table').DataTable({
-             responsive: true,
-             paging: false,
-             dom: 'ti',
-             "columnDefs": [
-                 {"orderable": false, "targets": [3, 7, 8]}
-             ]
-         });
+        import setUpWebsockets from '{% static "js/data_parser.js" %}';
 
-         $(".reserve-btn").on('click', function (event) {
-            $.post(
-              "{% url "reserve" %}",
-              {
-                "gpu": $(this).data("gpu"),
-                "device": $(this).data("device"),
-                "next-available-spot": "false"
-              },
-              function () { window.location.reload(); }
-            ).fail(function () {
-              alert( "Error, reservation failed. Please contact maintainers." );
+        $(document).ready(function() {
+            setUpWebsockets(deviceNames, currentUser);
+
+            $('#overview-table').DataTable({
+                responsive: true,
+                paging: false,
+                dom: 'ti',
+                "columnDefs": [
+                    {"orderable": false, "targets": [3, 7]}
+                ]
             });
-         });
-
-         setTimeout(refreshPage, 300000);
-     });
-
+        });
     </script>
 {% endblock %}

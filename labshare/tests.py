@@ -2,6 +2,11 @@ import datetime
 import io
 import json
 import mock as mock
+import os
+import random
+import string
+from channels.layers import get_channel_layer
+from channels.testing import ChannelsLiveServerTestCase
 from datetime import timedelta
 from django import template
 from django.contrib.auth.models import User, Group
@@ -12,13 +17,25 @@ from django_webtest import WebTest
 from guardian.shortcuts import assign_perm
 from guardian.utils import get_anonymous_user
 from model_mommy import mommy
+from model_mommy.recipe import Recipe
+from selenium import webdriver
+from selenium.common.exceptions import NoSuchElementException
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support.wait import WebDriverWait
+from unittest import skipIf
 from unittest.mock import Mock
 from urllib.error import URLError
 
+from labshare.consumers import GPUInfoUpdater
 from labshare.models import Device, GPU, Reservation, GPUProcess, EmailAddress
 from labshare.templatetags.icon import icon
-from labshare.templatetags.reservations import queue_position
-from labshare.utils import get_devices, update_gpu_info, determine_failed_gpus
+from labshare.utils import get_devices, update_gpu_info, determine_failed_gpus, publish_gpu_states, publish_device_state
+
+device_recipe = Recipe(
+    Device,
+    name=lambda: ''.join(random.choice(string.ascii_uppercase + string.ascii_lowercase + string.digits) for _ in range(16))
+)
 
 
 class TestLabshare(WebTest):
@@ -28,7 +45,7 @@ class TestLabshare(WebTest):
     @classmethod
     def setUpTestData(cls):
         cls.user = mommy.make(User)
-        cls.devices = mommy.make(Device, _quantity=3)
+        cls.devices = device_recipe.make(_quantity=3)
         mommy.make(GPU, device=cls.devices[0], _quantity=2, used_memory="12 Mib", total_memory="112 Mib")
         cls.gpu = mommy.make(GPU, device=cls.devices[1], used_memory="12 Mib", total_memory="112 Mib")
         mommy.make(GPU, device=cls.devices[-1], used_memory="12 Mib", total_memory="112 Mib")
@@ -45,29 +62,6 @@ class TestLabshare(WebTest):
 
         for device in self.devices:
             self.assertIn(device.name, response.body.decode('utf-8'))
-
-    def test_index_containing_reservations(self):
-        user1 = mommy.make(User)
-        user1.groups.add(self.group)
-        user2 = mommy.make(User)
-        user2.groups.add(self.group)
-        mommy.make(Reservation, gpu=self.devices[0].gpus.first(), user=self.user)
-        mommy.make(Reservation, gpu=self.devices[0].gpus.first(), user=user1)
-        mommy.make(Reservation, gpu=self.devices[1].gpus.first(), user=user2)
-
-        response = self.app.get(reverse("index"), user=self.user)
-        self.assertEqual(response.status_code, 200)
-
-        for reservation in Reservation.objects.all():
-            self.assertIn(reservation.user.username, response.body.decode('utf-8'))
-
-        user3 = mommy.make(User)
-        user3.groups.add(self.group)
-        mommy.make(Reservation, gpu=self.devices[0].gpus.first(), user=user3)
-
-        response = self.app.get(reverse("index"))
-        self.assertEqual(response.status_code, 200)
-        self.assertNotIn(user3.username, response.body.decode('utf-8'))
 
     def test_reserve_no_user(self):
         response = self.app.get(reverse("reserve"), expect_errors=True)
@@ -220,7 +214,7 @@ class TestLabshare(WebTest):
             expect_errors=True,
             xhr=True,
         )
-        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.status_code, 404)
 
     def test_get_gpu_info_bad_requests(self):
         response = self.app.get(
@@ -258,7 +252,7 @@ class TestLabshare(WebTest):
             user=self.user,
             xhr=True,
         )
-        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.status_code, 404)
 
     def test_get_gpu_info_no_reservation(self):
         gpu = self.devices[0].gpus.first()
@@ -299,7 +293,7 @@ class TestLabshare(WebTest):
 
     def test_gpu_done_no_reservation(self):
         gpu = self.devices[0].gpus.first()
-        response = self.app.get(reverse("done_with_gpu", args=[gpu.id]), user=self.user, expect_errors=True)
+        response = self.app.post(reverse("done_with_gpu", args=[gpu.id]), user=self.user, expect_errors=True)
         self.assertEqual(response.status_code, 404)
 
     def test_gpu_done_reservation_wrong_user(self):
@@ -308,23 +302,23 @@ class TestLabshare(WebTest):
         user.groups.add(self.group)
         mommy.make(Reservation, gpu=gpu, user=user)
 
-        response = self.app.get(reverse("done_with_gpu", args=[gpu.id]), user=self.user, expect_errors=True)
+        response = self.app.post(reverse("done_with_gpu", args=[gpu.id]), user=self.user, expect_errors=True)
         self.assertEqual(response.status_code, 403)
 
     def test_gpu_done_only_one_reservation(self):
         gpu = self.devices[0].gpus.first()
         mommy.make(Reservation, gpu=gpu, user=self.user)
 
-        response = self.app.get(reverse("done_with_gpu", args=[gpu.id]), user=self.user)
-        self.assertEqual(response.status_code, 302)
+        response = self.app.post(reverse("done_with_gpu", args=[gpu.id]), user=self.user)
+        self.assertEqual(response.status_code, 200)
         self.assertEqual(Reservation.objects.count(), 0)
 
     def test_gpu_done_one_more_reservation(self):
         gpu = self.devices[0].gpus.first()
         mommy.make(Reservation, _quantity=2, gpu=gpu, user=self.user, user_reserved_next_available_spot=False)
 
-        response = self.app.get(reverse("done_with_gpu", args=[gpu.id]), user=self.user)
-        self.assertEqual(response.status_code, 302)
+        response = self.app.post(reverse("done_with_gpu", args=[gpu.id]), user=self.user)
+        self.assertEqual(response.status_code, 200)
         self.assertEqual(Reservation.objects.count(), 1)
 
     def test_gpu_done_next_available_spot_reserved(self):
@@ -337,8 +331,8 @@ class TestLabshare(WebTest):
         mommy.make(Reservation, gpu=gpus.last(), user=user, user_reserved_next_available_spot=True)
         self.assertEqual(Reservation.objects.count(), 4)
 
-        response = self.app.get(reverse("done_with_gpu", args=[gpus.first().id]), user=self.user)
-        self.assertEqual(response.status_code, 302)
+        response = self.app.post(reverse("done_with_gpu", args=[gpus.first().id]), user=self.user)
+        self.assertEqual(response.status_code, 200)
         self.assertEqual(Reservation.objects.count(), 2)
         self.assertEqual(gpus.first().reservations.count(), 1)
         self.assertEqual(gpus.first().reservations.first().user, user)
@@ -356,8 +350,8 @@ class TestLabshare(WebTest):
         mommy.make(Reservation, gpu=gpus.last(), user=self.user)
         self.assertEqual(Reservation.objects.count(), 5)
 
-        response = self.app.get(reverse("done_with_gpu", args=[gpus.first().id]), user=self.user)
-        self.assertEqual(response.status_code, 302)
+        response = self.app.post(reverse("done_with_gpu", args=[gpus.first().id]), user=self.user)
+        self.assertEqual(response.status_code, 200)
         self.assertEqual(Reservation.objects.count(), 3)
         self.assertEqual(gpus.first().reservations.count(), 1)
         self.assertEqual(gpus.first().reservations.first().user, user)
@@ -366,16 +360,16 @@ class TestLabshare(WebTest):
         self.assertEqual(gpus.last().reservations.last().user, self.user)
 
     def test_cancel_gpu_no_user(self):
-        response = self.app.get(reverse("cancel_gpu", args=[self.devices[0].gpus.first().id]))
+        response = self.app.post(reverse("cancel_gpu", args=[self.devices[0].gpus.first().id]))
         self.assertEqual(response.status_code, 302)
 
     def test_cancel_gpu_wrong_gpu_id(self):
-        response = self.app.get(reverse("cancel_gpu", args=[17]), user=self.user, expect_errors=True)
+        response = self.app.post(reverse("cancel_gpu", args=[17]), user=self.user, expect_errors=True)
         self.assertEqual(response.status_code, 404)
 
     def test_cancel_gpu_no_reservation(self):
         gpu = self.devices[0].gpus.first()
-        response = self.app.get(reverse("cancel_gpu", args=[gpu.id]), user=self.user, expect_errors=True)
+        response = self.app.post(reverse("cancel_gpu", args=[gpu.id]), user=self.user, expect_errors=True)
         self.assertEqual(response.status_code, 404)
 
     def test_cancel_gpu_multiple_reservation(self):
@@ -387,13 +381,13 @@ class TestLabshare(WebTest):
         mommy.make(Reservation, gpu=gpu, user=self.user)
 
         self.assertEqual(gpu.last_reservation().user, self.user)
-        self.app.get(reverse("cancel_gpu", args=[gpu.id]), user=self.user)
+        self.app.post(reverse("cancel_gpu", args=[gpu.id]), user=self.user)
         self.assertEqual(Reservation.objects.count(), 2)
         self.assertEqual(gpu.last_reservation().user, other)
         self.assertEqual(gpu.current_reservation().user, self.user)
-        self.app.get(reverse("cancel_gpu", args=[gpu.id]), user=other)
+        self.app.post(reverse("cancel_gpu", args=[gpu.id]), user=other)
         self.assertEqual(Reservation.objects.count(), 1)
-        self.app.get(reverse("cancel_gpu", args=[gpu.id]), user=self.user)
+        self.app.post(reverse("cancel_gpu", args=[gpu.id]), user=self.user)
         self.assertEqual(Reservation.objects.count(), 0)
         self.assertEqual(gpu.last_reservation(), None)
 
@@ -405,7 +399,7 @@ class TestLabshare(WebTest):
         mommy.make(Reservation, gpu=gpu, user=users[0])
         mommy.make(Reservation, gpu=gpu, user=users[1])
 
-        response = self.app.get(reverse("cancel_gpu", args=[gpu.id]), user=self.user, expect_errors=True)
+        response = self.app.post(reverse("cancel_gpu", args=[gpu.id]), user=self.user, expect_errors=True)
         self.assertEqual(response.status_code, 404)
 
     def test_cancel_gpu(self):
@@ -415,7 +409,7 @@ class TestLabshare(WebTest):
         mommy.make(Reservation, gpu=gpu, user=other)
         mommy.make(Reservation, gpu=gpu, user=self.user)
 
-        self.app.get(reverse("cancel_gpu", args=[gpu.id]), user=self.user)
+        self.app.post(reverse("cancel_gpu", args=[gpu.id]), user=self.user)
         self.assertEqual(Reservation.objects.count(), 1)
         self.assertEqual(gpu.current_reservation().user, other)
 
@@ -467,20 +461,6 @@ class TestLabshare(WebTest):
             user=reservation.user
         ))
 
-    def test_template_tag_position_in_queue(self):
-        gpu = self.devices[0].gpus.first()
-        other = mommy.make(User)
-        other.groups.add(self.group)
-        mommy.make(Reservation, gpu=gpu, user=other)
-        mommy.make(Reservation, gpu=gpu, user=self.user)
-
-        self.assertEqual(queue_position(gpu, self.user), 1)
-
-    def test_template_tag_position_in_queue_not_reserved(self):
-        gpu = self.devices[0].gpus.first()
-
-        self.assertIsNone(queue_position(gpu, self.user))
-
 
 class TestMessages(WebTest):
 
@@ -488,7 +468,7 @@ class TestMessages(WebTest):
 
     def setUp(self):
         self.user = mommy.make(User, is_superuser=True, is_staff=True, email="test@example.com")
-        self.devices = mommy.make(Device, _quantity=3)
+        self.devices = device_recipe.make(_quantity=3)
         mommy.make(GPU, device=self.devices[0], _quantity=2, used_memory="12 Mib", total_memory="112 Mib")
         mommy.make(GPU, device=self.devices[1], used_memory="12 Mib", total_memory="112 Mib")
         mommy.make(GPU, device=self.devices[-1], used_memory="12 Mib", total_memory="112 Mib")
@@ -653,7 +633,7 @@ class GPUProcessTests(WebTest):
     def setUp(self):
         self.user = mommy.make(User, is_superuser=True)
 
-        devices = mommy.make(Device, _quantity=3)
+        devices = device_recipe.make(_quantity=3)
         for idx, device in enumerate(devices):
             gpus = mommy.make(GPU, _quantity=2, device=device)
             for gpu in gpus:
@@ -661,34 +641,6 @@ class GPUProcessTests(WebTest):
                     mommy.make(GPUProcess, gpu=gpu, _quantity=2)
                 elif idx == 2:
                     mommy.make(GPUProcess, gpu=gpu)
-
-    def test_process_button_display(self):
-        response = self.app.get(reverse("index"), user=self.user)
-        self.assertEqual(response.status_code, 200)
-
-        response_body = response.body.decode('utf-8')
-        self.assertEqual(response_body.count("disabled"), 2)
-        self.assertEqual(response_body.count("1 Process"), 2)
-        self.assertEqual(response_body.count("2 Processes"), 2)
-
-    def test_process_overlay(self):
-        response = self.app.get(reverse("index"), user=self.user)
-        self.assertEqual(response.status_code, 200)
-
-        response_body = response.body.decode('utf-8')
-        for i in range(1, GPUProcess.objects.count() + 1):
-            self.assertIn('gpu-proc-list-{}'.format(i), response_body)
-
-    def test_process_info_in_response(self):
-        response = self.app.get(reverse("index"), user=self.user)
-        self.assertEqual(response.status_code, 200)
-
-        response_body = response.body.decode('utf-8')
-        for process in GPUProcess.objects.all():
-            self.assertIn("PID: {}".format(process.pid), response_body)
-            self.assertIn(process.name, response_body)
-            self.assertIn("User: {}".format(process.username), response_body)
-            self.assertIn("Memory Usage: {}".format(process.memory_usage), response_body)
 
     def test_gpu_process_string(self):
         for process in GPUProcess.objects.all():
@@ -708,7 +660,7 @@ class LabSharePermissionTests(WebTest):
     def setUp(self):
         self.staff_user = mommy.make(User)
         self.user = mommy.make(User)
-        self.devices = mommy.make(Device, _quantity=3)
+        self.devices = device_recipe.make(_quantity=3)
         mommy.make(GPU, device=self.devices[0], _quantity=2, used_memory="12 Mib", total_memory="112 Mib")
         mommy.make(GPU, device=self.devices[1], used_memory="12 Mib", total_memory="112 Mib")
         mommy.make(GPU, device=self.devices[-1], used_memory="12 Mib", total_memory="112 Mib")
@@ -808,30 +760,48 @@ class LabSharePermissionTests(WebTest):
 
     def test_gpu_done(self):
         mommy.make(Reservation, gpu=self.devices[0].gpus.first(), user=self.user)
-        response = self.app.get(reverse("done_with_gpu", args=[self.devices[0].gpus.first().id]), user=self.user)
-        self.assertRedirects(response, reverse("index"))
+        response = self.app.post(reverse("done_with_gpu", args=[self.devices[0].gpus.first().id]), user=self.user)
+        self.assertEqual(response.status_code, 200)
 
         mommy.make(Reservation, gpu=self.devices[-1].gpus.first(), user=self.staff_user)
-        response = self.app.get(reverse("done_with_gpu", args=[self.devices[-1].gpus.first().id]), user=self.user, expect_errors=True)
+        response = self.app.post(
+            reverse("done_with_gpu", args=[self.devices[-1].gpus.first().id]),
+            user=self.user,
+            expect_errors=True
+        )
         self.assertEqual(response.status_code, 403)
         self.assertEqual(Reservation.objects.count(), 1)
 
-        response = self.app.get(reverse("done_with_gpu", args=[self.devices[-1].gpus.first().id]), user=self.staff_user)
-        self.assertRedirects(response, reverse("index"))
+        response = self.app.post(reverse("done_with_gpu", args=[self.devices[-1].gpus.first().id]), user=self.staff_user)
+        self.assertEqual(response.status_code, 200)
+
+        response = self.app.get(
+            reverse("done_with_gpu", args=[self.devices[-1].gpus.first().id]),
+            user=self.user,
+            expect_errors=True
+        )
+        self.assertEqual(response.status_code, 400)
 
     def test_gpu_cancel(self):
         mommy.make(Reservation, gpu=self.devices[0].gpus.first(), user=self.user)
-        response = self.app.get(reverse("cancel_gpu", args=[self.devices[0].gpus.first().id]), user=self.user)
-        self.assertRedirects(response, reverse("index"))
+        response = self.app.post(reverse("cancel_gpu", args=[self.devices[0].gpus.first().id]), user=self.user)
+        self.assertEqual(response.status_code, 200)
 
         mommy.make(Reservation, gpu=self.devices[-1].gpus.first(), user=self.staff_user)
-        response = self.app.get(reverse("cancel_gpu", args=[self.devices[-1].gpus.first().id]), user=self.user,
+        response = self.app.post(reverse("cancel_gpu", args=[self.devices[-1].gpus.first().id]), user=self.user,
                                 expect_errors=True)
         self.assertEqual(response.status_code, 403)
         self.assertEqual(Reservation.objects.count(), 1)
 
-        response = self.app.get(reverse("cancel_gpu", args=[self.devices[-1].gpus.first().id]), user=self.staff_user)
-        self.assertRedirects(response, reverse("index"))
+        response = self.app.post(reverse("cancel_gpu", args=[self.devices[-1].gpus.first().id]), user=self.staff_user)
+        self.assertEqual(response.status_code, 200)
+
+        response = self.app.get(
+            reverse("cancel_gpu", args=[self.devices[-1].gpus.first().id]),
+            user=self.staff_user,
+            expect_errors=True
+        )
+        self.assertEqual(response.status_code, 400)
 
 
 class EmailAddressTests(WebTest):
@@ -907,7 +877,7 @@ def return_bytes_io(func):
 class UpdateGPUTests(TestCase):
 
     def setUp(self):
-        self.device = mommy.make(Device)
+        self.device = device_recipe.make()
 
     @mock.patch("urllib.request.urlopen", fail_url)
     def test_update_gpu_info_no_gpu_works(self):
@@ -1128,3 +1098,380 @@ class HijackTests(WebTest):
         usernames = [u.username for u in User.objects.all()]
         for username in usernames:
             self.assertIn(username, body)
+
+
+send_function_mock = mock.MagicMock()
+
+
+def async_to_sync_mock(func_name):
+    return send_function_mock
+
+
+class PublishMethodTests(TestCase):
+
+    def setUp(self):
+        self.device = device_recipe.make()
+        self.device_2 = device_recipe.make()
+        self.user = mommy.make(User)
+        assign_perm('labshare.use_device', self.user, self.device)
+
+        mommy.make(GPU, device=self.device, _quantity=2)
+        mommy.make(GPU, device=self.device_2, _quantity=2)
+
+    @mock.patch('labshare.utils.async_to_sync', async_to_sync_mock)
+    def test_publish_gpu_states(self):
+        publish_gpu_states()
+        for device in [self.device, self.device_2]:
+            data = {
+                'type': 'update_info',
+                'message': json.dumps(device.serialize()),
+            }
+
+            send_function_mock.assert_any_call(device.name, data)
+
+    @mock.patch('labshare.utils.async_to_sync', async_to_sync_mock)
+    def test_publish_device_state_without_channel_name(self):
+        publish_device_state(self.device)
+        data = {
+            'type': 'update_info',
+            'message': json.dumps(self.device.serialize()),
+        }
+
+        send_function_mock.assert_called_with(self.device.name, data)
+
+    @mock.patch('labshare.utils.async_to_sync', async_to_sync_mock)
+    def test_publish_device_state_without_channel_name(self):
+        channel_name = "kekse"
+        publish_device_state(self.device, channel_name=channel_name)
+        data = {
+            'type': 'update_info',
+            'message': json.dumps(self.device.serialize()),
+        }
+
+        send_function_mock.assert_called_with(channel_name, data)
+
+
+class ConsumerTests(TestCase):
+
+    def setUp(self):
+        self.device = device_recipe.make()
+        self.device_2 = device_recipe.make()
+        self.user = mommy.make(User)
+        assign_perm('labshare.use_device', self.user, self.device)
+
+        mommy.make(GPU, device=self.device, _quantity=2)
+        mommy.make(GPU, device=self.device_2, _quantity=2)
+
+        self.scope = {
+            "user": self.user,
+            "url_route": {
+                "kwargs": {
+                    "device_name": None
+                }
+            }
+        }
+
+        self.consumer = GPUInfoUpdater(self.scope)
+        self.consumer.channel_layer = get_channel_layer()
+        self.consumer.channel_name = "kekse"
+        self.mock_method = mock.MagicMock(return_value=None)
+        self.consumer.accept = self.mock_method
+
+    def test_consumer_no_permission(self):
+        self.consumer.scope['url_route']['kwargs']['device_name'] = self.device_2.name
+        self.consumer.connect()
+        self.mock_method.assert_not_called()
+
+    def test_consumer_permission(self):
+        self.consumer.scope['url_route']['kwargs']['device_name'] = self.device.name
+        self.consumer.connect()
+        self.mock_method.assert_called()
+
+    @mock.patch('labshare.consumers.async_to_sync', async_to_sync_mock)
+    def test_consumer_disconnect(self):
+        device_name = "Lorem-Device"
+        self.consumer.device_name = device_name
+        self.consumer.disconnect("lorem ipsum")
+        send_function_mock.assert_called_with(device_name, self.consumer.channel_name)
+
+    def test_consumer_update_info(self):
+        message = "Lorem Ipsum"
+        self.consumer.send = mock.MagicMock()
+        self.consumer.update_info({"message": message})
+        self.consumer.send.assert_called_with(text_data=message)
+
+
+class FrontendTestsBase(ChannelsLiveServerTestCase):
+    serve_static = True
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        try:
+            cls.driver = webdriver.Chrome()
+        except:
+            super().tearDownClass()
+            raise
+
+        cls.password = 'test'
+
+        cls.staff_user = mommy.make(User, is_superuser=True)
+        cls.staff_user.set_password(cls.password)
+        cls.staff_user.save()
+
+        cls.user = mommy.make(User)
+        cls.user.set_password(cls.password)
+        cls.user.save()
+
+        cls.device_1 = device_recipe.make()
+        gpus = mommy.make(GPU, device=cls.device_1, _quantity=3)
+        mommy.make(GPUProcess, gpu=gpus[0])
+        mommy.make(GPUProcess, gpu=gpus[1])
+        mommy.make(Reservation, user=cls.staff_user, gpu=gpus[0])
+        mommy.make(Reservation, user=cls.user, gpu=gpus[1])
+        mommy.make(Reservation, user=cls.staff_user, gpu=gpus[1])
+        assign_perm('labshare.use_device', cls.user, cls.device_1)
+
+        cls.device_2 = device_recipe.make()
+        gpus = mommy.make(GPU, device=cls.device_2, _quantity=2)
+        mommy.make(GPUProcess, gpu=gpus[0], _quantity=2)
+        mommy.make(Reservation, user=cls.staff_user, gpu=gpus[0])
+
+    def setUp(self):
+        self.login_user(self.staff_user.username)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.driver.quit()
+        super().tearDownClass()
+
+    def login_user(self, username):
+        if self.driver.get_cookie('sessionid') is not None:
+            return
+
+        login_success = self.client.login(username=username, password=self.password)
+        self.assertTrue(login_success)
+        session_cookie = self.client.cookies['sessionid']
+
+        self.driver.get(self.live_server_url + reverse('index'))
+        self.driver.add_cookie({'name': 'sessionid', 'value': session_cookie.value, 'secure': False, 'path': '/'})
+        self.driver.refresh()
+
+    def wait_for_page_load(self):
+        self.driver.refresh()
+        WebDriverWait(self.driver, 2).until(
+            lambda _: all(EC.presence_of_element_located((By.ID, gpu.uuid)) for gpu in GPU.objects.all()),
+            "Gpus did not show up on page, Websocket Connection not okay?"
+        )
+
+    def open_new_window(self):
+        self.driver.execute_script('window.open("about:blank", "_blank");')
+        self.driver.switch_to_window(self.driver.window_handles[-1])
+
+    def close_all_new_windows(self):
+        while len(self.driver.window_handles) > 1:
+            self.driver.switch_to_window(self.driver.window_handles[-1])
+            self.driver.execute_script('window.close();')
+        if len(self.driver.window_handles) == 1:
+            self.driver.switch_to_window(self.driver.window_handles[0])
+
+    def switch_to_window(self, window_id):
+        self.driver.switch_to_window(self.driver.window_handles[window_id])
+
+
+@skipIf("TRAVIS" in os.environ and os.environ["TRAVIS"] == "true", "Skipping this test on Travis CI.")
+class FrontendOverviewDataTest(FrontendTestsBase):
+
+    def test_overview_gpu_data_correct(self):
+        self.wait_for_page_load()
+
+        for gpu in GPU.objects.all():
+            # 1. check that the elements look correct
+            element = self.driver.find_element_by_id(gpu.uuid)
+            memory_element = element.find_element_by_class_name("gpu-memory").text
+            self.assertEqual(memory_element, gpu.memory_usage())
+            current_reservation_element = element.find_element_by_class_name("gpu-current-reservation").text
+            current_user = gpu.get_current_user()
+            self.assertEqual(current_reservation_element, getattr(current_user, 'username', ''))
+            next_reservation_element = element.find_element_by_class_name("gpu-next-reservation").text
+            next_users = gpu.get_next_users()
+            self.assertEqual(next_reservation_element, next_users[0].username if len(next_users) > 0 else '')
+
+            # 2. check that the buttons are rendered correctly
+            buttons = element.find_element_by_class_name("gpu-actions")
+            hidden_elements = buttons.find_elements_by_class_name("hidden")
+            self.assertEqual(len(hidden_elements), 2)
+            current_reservation = gpu.get_current_reservation()
+            next_reservations = list(gpu.get_next_reservations())
+            for reservation in Reservation.objects.filter(gpu=gpu, user=self.staff_user):
+                if reservation == current_reservation:
+                    self.assertNotIn(
+                        "hidden",
+                        buttons.find_element_by_class_name("gpu-done-button").get_attribute("class")
+                    )
+                else:
+                    self.assertIn(
+                        "hidden",
+                        buttons.find_element_by_class_name("gpu-done-button").get_attribute("class")
+                    )
+
+                if reservation in next_reservations:
+                    self.assertNotIn(
+                        "hidden",
+                        buttons.find_element_by_class_name("gpu-cancel-button").get_attribute("class")
+                    )
+                else:
+                    self.assertIn(
+                        "hidden",
+                        buttons.find_element_by_class_name("gpu-cancel-button").get_attribute("class")
+                    )
+
+                if reservation != current_reservation and reservation not in next_reservations:
+                    self.assertNotIn(
+                        "hidden",
+                        buttons.find_element_by_class_name("gpu-reserve-button").get_attribute("class")
+                    )
+                else:
+                    self.assertIn(
+                        "hidden",
+                        buttons.find_element_by_class_name("gpu-reserve-button").get_attribute("class")
+                    )
+
+
+@skipIf("TRAVIS" in os.environ and os.environ["TRAVIS"] == "true", "Skipping this test on Travis CI.")
+class FrontendOverviewNonSuperuserTest(FrontendTestsBase):
+
+    def setUp(self):
+        self.login_user(self.user.username)
+
+    def test_overview_table_populated_with_device_data_for_non_superuser(self):
+        WebDriverWait(self.driver, 2).until(
+            lambda _: all(EC.presence_of_element_located((By.ID, gpu.uuid)) for gpu in GPU.objects.filter(device=self.device_1)),
+            "Gpus did not show up on page, Websocket Connection not okay?"
+        )
+
+        for gpu in GPU.objects.filter(device=self.device_2):
+            self.assertRaises(NoSuchElementException, self.driver.find_element_by_id, gpu.uuid)
+
+
+@skipIf("TRAVIS" in os.environ and os.environ["TRAVIS"] == "true", "Skipping this test on Travis CI.")
+class FrontendOverviewDoneButtonTest(FrontendTestsBase):
+
+    def test_overview_done_button(self):
+        self.wait_for_page_load()
+
+        num_reservations_for_user = Reservation.objects.filter(user=self.staff_user).count()
+        gpu = self.driver.find_element_by_id(self.device_1.gpus.first().uuid)
+        done_button = gpu.find_element_by_class_name("gpu-done-button")
+        self.assertNotIn("hidden", done_button.get_attribute("class"))
+        done_button.click()
+
+        self.wait_for_page_load()
+        self.assertEqual(Reservation.objects.filter(user=self.staff_user).count(), num_reservations_for_user - 1)
+
+
+@skipIf("TRAVIS" in os.environ and os.environ["TRAVIS"] == "true", "Skipping this test on Travis CI.")
+class FrontendOverviewCancelButtonTest(FrontendTestsBase):
+
+    def test_overview_cancel_button(self):
+        self.wait_for_page_load()
+
+        num_reservations_for_user = Reservation.objects.filter(user=self.staff_user).count()
+        gpu = self.driver.find_element_by_id(list(self.device_1.gpus.all())[1].uuid)
+        cancel_button = gpu.find_element_by_class_name("gpu-cancel-button")
+        self.assertNotIn("hidden", cancel_button.get_attribute("class"))
+        cancel_button.click()
+
+        self.wait_for_page_load()
+        self.assertEqual(Reservation.objects.filter(user=self.staff_user).count(), num_reservations_for_user - 1)
+
+
+@skipIf("TRAVIS" in os.environ and os.environ["TRAVIS"] == "true", "Skipping this test on Travis CI.")
+class FrontendOverviewReserveButtonTest(FrontendTestsBase):
+
+    def test_overview_cancel_button(self):
+        self.wait_for_page_load()
+
+        num_reservations_for_user = Reservation.objects.filter(user=self.staff_user).count()
+        gpu = self.driver.find_element_by_id(list(self.device_1.gpus.all())[2].uuid)
+        reserve_button = gpu.find_element_by_class_name("gpu-reserve-button")
+        self.assertNotIn("hidden", reserve_button.get_attribute("class"))
+        reserve_button.click()
+
+        self.wait_for_page_load()
+        self.assertEqual(Reservation.objects.filter(user=self.staff_user).count(), num_reservations_for_user + 1)
+
+
+@skipIf("TRAVIS" in os.environ and os.environ["TRAVIS"] == "true", "Skipping this test on Travis CI.")
+class FrontendOverviewReserveSyncTest(FrontendTestsBase):
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.driver.implicitly_wait(0.5)
+
+    def test_overview_button_sync(self):
+        self.wait_for_page_load()
+        try:
+            self.open_new_window()
+            self.driver.get(self.live_server_url + reverse('index'))
+            self.wait_for_page_load()
+            self.switch_to_window(0)
+
+            # click the reserve button
+            gpu = self.driver.find_element_by_id(list(self.device_1.gpus.all())[2].uuid)
+            gpu.find_element_by_class_name("gpu-reserve-button").click()
+
+            # check that reservation appeared in new window
+            self.switch_to_window(1)
+            gpu = self.driver.find_element_by_id(list(self.device_1.gpus.all())[2].uuid)
+            reserve_button = gpu.find_element_by_class_name("gpu-reserve-button")
+            self.assertIn("hidden", reserve_button.get_attribute("class"))
+            done_button = gpu.find_element_by_class_name("gpu-done-button")
+            self.assertNotIn("hidden", done_button.get_attribute("class"))
+        finally:
+            self.close_all_new_windows()
+
+
+@skipIf("TRAVIS" in os.environ and os.environ["TRAVIS"] == "true", "Skipping this test on Travis CI.")
+class FrontendOverviewProcessListTest(FrontendTestsBase):
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.driver.implicitly_wait(0.5)
+
+    def test_process_overview(self):
+        self.wait_for_page_load()
+        self.assertRaises(NoSuchElementException, self.driver.find_element_by_id, "full-process-list")
+
+        gpu = self.device_2.gpus.first()
+        gpu_row = self.driver.find_element_by_id(gpu.uuid)
+        process_show_button = gpu_row.find_element_by_class_name("gpu-process-show")
+        WebDriverWait(self.driver, 2).until(
+            lambda _: EC.element_to_be_clickable(process_show_button)
+        )
+        # self.assertFalse(process_show_button.get_property("disabled"))
+        self.assertRaises(NoSuchElementException, self.driver.find_element_by_id, "full-process-list")
+        process_show_button.click()
+
+        WebDriverWait(self.driver, 2).until(
+            lambda _: EC.visibility_of_element_located((By.ID, "full-process-list")),
+            "Modal did not open!"
+        )
+
+        process_list = self.driver.find_element_by_id("full-process-list")
+        process_details = process_list.find_elements_by_class_name("gpu-process-details")
+
+        for process_detail, process in zip(process_details, gpu.processes.all()):
+            process_name = process_detail.find_element_by_class_name("panel-heading").text
+            self.assertIn(process_name, process.name)
+
+            pid_text = process_detail.find_elements_by_class_name("list-group-item")[0].text
+            self.assertIn(str(process.pid), pid_text)
+
+            user_text = process_detail.find_elements_by_class_name("list-group-item")[1].text
+            self.assertIn(process.username, user_text)
+
+            memory_text = process_detail.find_elements_by_class_name("list-group-item")[2].text
+            self.assertIn(process.memory_usage, memory_text)

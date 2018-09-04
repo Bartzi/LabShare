@@ -3,18 +3,20 @@ import json
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
-from django.core.exceptions import ObjectDoesNotExist, PermissionDenied
+from django.core.exceptions import ObjectDoesNotExist, PermissionDenied, SuspiciousOperation
 from django.core.mail import EmailMessage
 from django.http import HttpResponseRedirect, HttpResponseBadRequest, HttpResponse, HttpResponseForbidden, Http404
 from django.shortcuts import get_object_or_404
 from django.urls import reverse
+from django.views.decorators.csrf import ensure_csrf_cookie
 
 from .forms import DeviceSelectForm, MessageForm, ViewAsForm
-from labshare.utils import send_reservation_mail_for, send_gpu_done_mail, login_required_ajax
+from labshare.utils import send_reservation_mail_for, send_gpu_done_mail, login_required_ajax, publish_device_state
 from .models import Device, Reservation, GPU
 from labshare.decorators import render_to
 
 
+@ensure_csrf_cookie
 @render_to("overview.html")
 def index(request):
     devices = list(filter(lambda device: device.can_be_used_by(request.user), Device.objects.all()))
@@ -28,8 +30,8 @@ def reserve(request):
 
     form = DeviceSelectForm(request.POST or None, devices=accessible_devices)
     if form.is_valid():
-        if json.loads(form.data["next-available-spot"]):
-            device = Device.objects.get(name=form.data["device"])
+        device = Device.objects.get(name=form.data["device"])
+        if json.loads(form.data.get("next-available-spot", "false")):
             if not device.can_be_used_by(request.user):
                 raise PermissionDenied
             # first check whether a gpu is already available on that given machine
@@ -54,6 +56,11 @@ def reserve(request):
 
             send_reservation_mail_for(request, gpu)
 
+        # notify our users of this change for this device
+        publish_device_state(device)
+
+        if request.is_ajax():
+            return HttpResponse()
         return HttpResponseRedirect(reverse("index"))
 
     return {"form": form}
@@ -62,11 +69,11 @@ def reserve(request):
 @login_required_ajax
 def gpus(request):
     if request.method != "GET" or not request.is_ajax():
-        return HttpResponseBadRequest()
+        raise SuspiciousOperation
 
     device_name = request.GET.get('device_name', None)
     if device_name is None:
-        return HttpResponseBadRequest()
+        raise Http404
 
     device = Device.objects.get(name=device_name)
     if not device.can_be_used_by(request.user):
@@ -83,11 +90,11 @@ def gpus(request):
 @login_required_ajax
 def gpu_info(request):
     if request.method != "GET" or not request.is_ajax():
-        return HttpResponseBadRequest()
+        raise SuspiciousOperation
 
     uuid = request.GET.get('uuid', None)
     if uuid is None:
-        return HttpResponseBadRequest()
+        raise Http404
 
     gpu = GPU.objects.get(uuid=uuid)
 
@@ -109,6 +116,9 @@ def gpu_info(request):
 def gpu_done(request, gpu_id):
     gpu = get_object_or_404(GPU, pk=gpu_id)
 
+    if request.method != "POST":
+        raise SuspiciousOperation
+
     if not gpu.device.can_be_used_by(request.user):
         raise PermissionDenied
 
@@ -118,7 +128,7 @@ def gpu_done(request, gpu_id):
         raise Http404
 
     if current_reservation.user != request.user:
-        return HttpResponseForbidden()
+        raise PermissionDenied
 
     current_reservation.delete()
 
@@ -140,13 +150,16 @@ def gpu_done(request, gpu_id):
                 reservation.delete()
 
         send_gpu_done_mail(request, gpu, current_reservation)
+    publish_device_state(gpu.device)
 
-    return HttpResponseRedirect(reverse("index"))
+    return HttpResponse()
 
 
 @login_required
 def gpu_cancel(request, gpu_id):
     gpu = get_object_or_404(GPU, pk=gpu_id)
+    if request.method != "POST":
+        raise SuspiciousOperation
 
     if not gpu.device.can_be_used_by(request.user):
         raise PermissionDenied
@@ -154,10 +167,11 @@ def gpu_cancel(request, gpu_id):
     try:
         reservation = gpu.reservations.filter(user=request.user).latest("time_reserved")
         reservation.delete()
+        publish_device_state(gpu.device)
     except ObjectDoesNotExist as e:
         raise Http404
 
-    return HttpResponseRedirect(reverse("index"))
+    return HttpResponse()
 
 
 @login_required
@@ -172,7 +186,7 @@ def send_message(request):
         bcc_addresses = []
         if form.cleaned_data.get('message_all_users'):
             if not request.user.is_staff:
-                return HttpResponseBadRequest()
+                raise SuspiciousOperation
             users = User.objects.exclude(id=sender.id)
             bcc_addresses = [user.email for user in users]
             bcc_addresses.extend([address.email for user in users for address in user.email_addresses.all()])
