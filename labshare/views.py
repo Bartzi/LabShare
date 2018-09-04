@@ -8,6 +8,7 @@ from django.core.mail import EmailMessage
 from django.http import HttpResponseRedirect, HttpResponseBadRequest, HttpResponse, HttpResponseForbidden, Http404
 from django.shortcuts import get_object_or_404
 from django.urls import reverse
+from django.views.decorators.csrf import ensure_csrf_cookie
 
 from .forms import DeviceSelectForm, MessageForm, ViewAsForm
 from labshare.utils import send_reservation_mail_for, send_gpu_done_mail, login_required_ajax, publish_device_state
@@ -15,6 +16,7 @@ from .models import Device, Reservation, GPU
 from labshare.decorators import render_to
 
 
+@ensure_csrf_cookie
 @render_to("overview.html")
 def index(request):
     devices = list(filter(lambda device: device.can_be_used_by(request.user), Device.objects.all()))
@@ -57,6 +59,8 @@ def reserve(request):
         # notify our users of this change for this device
         publish_device_state(device)
 
+        if request.is_ajax():
+            return HttpResponse()
         return HttpResponseRedirect(reverse("index"))
 
     return {"form": form}
@@ -148,7 +152,7 @@ def gpu_done(request, gpu_id):
         send_gpu_done_mail(request, gpu, current_reservation)
     publish_device_state(gpu.device)
 
-    return HttpResponseRedirect(reverse('index'))
+    return HttpResponse()
 
 
 @login_required
@@ -167,7 +171,7 @@ def gpu_cancel(request, gpu_id):
     except ObjectDoesNotExist as e:
         raise Http404
 
-    return HttpResponseRedirect(reverse('index'))
+    return HttpResponse()
 
 
 @login_required
