@@ -5,7 +5,7 @@ function showCorrectButton(gpuRow, gpuData, currentUser) {
     gpuRow.find("span[class*='-button']").addClass('hidden');
     let button;
     if (gpuData.current_user === currentUser) {
-        // the user that is viweing this page has reserved this gpu
+        // the user that is viewing this page has reserved this gpu
         button = gpuRow.find('.gpu-done-button');
     } else if (gpuData.next_users.includes(currentUser)) {
         // the user is in the queue, so he should be able to cancel his reservation
@@ -21,7 +21,7 @@ function updateGPUData(data, currentUser) {
     for (let gpu of data.gpus) {
         const gpuRow = $('#' + gpu.uuid);
         gpuRow.find('.gpu-memory').html(gpu.memory);
-        gpuRow.find('.gpu-last-update').html(gpu.last_update);
+        gpuRow.find('.gpu-last-update').timeago('init').timeago('update', gpu.last_update);
         gpuRow.find('.gpu-current-reservation').html(gpu.current_user);
         gpuRow.find('.gpu-next-reservation').html(gpu.next_users.length > 0 ? gpu.next_users[0] : '');
 
@@ -33,10 +33,22 @@ function updateGPUData(data, currentUser) {
         processButton.prop("disabled", numGPUProcesses === 0);
 
         if (gpu.in_use) {
-            gpuRow.addClass("warning");
+            if (!gpuRow.hasClass("warning")) {
+                gpuRow.addClass("warning");
+            }
+        } else {
+            if (gpuRow.hasClass("warning")) {
+                gpuRow.removeClass("warning");
+            }
         }
         if (gpu.failed) {
-            gpuRow.addClass("danger");
+            if (!gpuRow.hasClass("danger")) {
+                gpuRow.addClass("danger");
+            }
+        } else {
+            if (gpuRow.hasClass("danger")) {
+                gpuRow.removeClass("danger");
+            }
         }
         showCorrectButton(gpuRow, gpu, currentUser);
     }
@@ -106,7 +118,6 @@ function setupWebsockets(deviceNames, currentUser) {
              const data = JSON.parse(event.data);
              deviceData[socket.device_name] = data;
              updateGPUData(data, currentUser);
-             console.log(data);
          });
      }
 }

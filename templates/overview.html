@@ -29,7 +29,7 @@
                     <tbody style="background-color: #fff;">
                         {% for device in devices %}
                             {% for gpu in device.gpus.all %}
-                                <tr id="{{ gpu.uuid }}" {% if gpu.in_use %}class="warning"{% endif %}>
+                                <tr id="{{ gpu.uuid }}">
                                     <td>{{ device.name }}</td>
                                     <td>{{ gpu.model_name }}</td>
                                     <td class="gpu-memory">- MiB / - MiB</td>
@@ -73,14 +73,16 @@
 {% block scripts %}
     {{ block.super }}
     <!-- DataTables JavaScript -->
-    <script src="{% static "node_modules/datatables.net/js/jquery.dataTables.min.js" %}"></script>
-    <script src="{% static "node_modules/datatables.net-bs/js/dataTables.bootstrap.min.js" %}"></script>
-    <script src="{% static "node_modules/reconnectingwebsocket/reconnecting-websocket.min.js" %}"></script>
-    <script src="{% static "node_modules/pluralize/pluralize.js" %}"></script>
+    <script src="{% static 'node_modules/datatables.net/js/jquery.dataTables.min.js' %}"></script>
+    <script src="{% static 'node_modules/datatables.net-bs/js/dataTables.bootstrap.min.js' %}"></script>
+    <script src="{% static 'node_modules/reconnectingwebsocket/reconnecting-websocket.min.js' %}"></script>
+    <script src="{% static 'node_modules/pluralize/pluralize.js' %}"></script>
+    <script src="{% static 'node_modules/timeago/jquery.timeago.js' %}"></script>
 
     <script type="module">
         const deviceNames = [{% for device in devices %}"{{ device.name }}"{% if not forloop.last %},{% endif %}{% endfor %}];
         const currentUser = "{{ user.username }}";
+        $.timeago.settings.strings.seconds = "some seconds";
 
         import setUpWebsockets from '{% static "js/data_parser.js" %}';
 
