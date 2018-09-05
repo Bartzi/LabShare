@@ -37,7 +37,7 @@ function updateGPUData(data, currentUser) {
                 gpuRow.addClass("warning");
             }
         } else {
-            if (!gpuRow.hasClass("warning")) {
+            if (gpuRow.hasClass("warning")) {
                 gpuRow.removeClass("warning");
             }
         }
@@ -46,7 +46,7 @@ function updateGPUData(data, currentUser) {
                 gpuRow.addClass("danger");
             }
         } else {
-            if (!gpuRow.hasClass("danger")) {
+            if (gpuRow.hasClass("danger")) {
                 gpuRow.removeClass("danger");
             }
         }
