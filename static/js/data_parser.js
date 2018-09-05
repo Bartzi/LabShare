@@ -5,7 +5,7 @@ function showCorrectButton(gpuRow, gpuData, currentUser) {
     gpuRow.find("span[class*='-button']").addClass('hidden');
     let button;
     if (gpuData.current_user === currentUser) {
-        // the user that is viweing this page has reserved this gpu
+        // the user that is viewing this page has reserved this gpu
         button = gpuRow.find('.gpu-done-button');
     } else if (gpuData.next_users.includes(currentUser)) {
         // the user is in the queue, so he should be able to cancel his reservation
