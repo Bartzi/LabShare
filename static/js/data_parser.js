@@ -106,7 +106,6 @@ function setupWebsockets(deviceNames, currentUser) {
              const data = JSON.parse(event.data);
              deviceData[socket.device_name] = data;
              updateGPUData(data, currentUser);
-             console.log(data);
          });
      }
 }
