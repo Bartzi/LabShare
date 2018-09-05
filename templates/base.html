@@ -18,7 +18,7 @@
 
     <!-- Bootstrap Core CSS -->
     <link href="{% static "node_modules/bootstrap/dist/css/bootstrap.min.css" %}" rel="stylesheet">
-    <link href="{% static "node_modules/bootstrap/dist/fonts/glyphicons-halflings-regular.woff" %}" rel="stylesheet">
+    <link href="{% static "node_modules/bootstrap/dist/fonts/glyphicons-halflings-regular.woff" %}">
     {% if request and request|is_hijacked %}
         <link rel="stylesheet" type="text/css" href="{% static 'hijack/hijack-styles.css' %}" />
     {% endif %}
