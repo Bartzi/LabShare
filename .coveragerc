@@ -3,6 +3,7 @@ branch = True
 omit =
 	*/tests.py
 	*/migrations/*
+	labshare/asgi.py
 	labshare/wsgi.py
 	labshare/settings.py
 	labshare/management/commands/update.py
