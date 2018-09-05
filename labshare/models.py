@@ -87,7 +87,7 @@ class GPU(models.Model):
             'uuid': self.uuid,
             'memory': self.memory_usage(),
             'processes': [process.serialize() for process in self.processes.all()],
-            'last_update': self.last_updated.astimezone(pytz.timezone(settings.TIME_ZONE)).strftime("%H:%M %d.%m"),
+            'last_update': self.last_updated.astimezone(pytz.timezone(settings.TIME_ZONE)).isoformat(),
             'failed': self.marked_as_failed,
             'in_use': self.in_use,
             'current_user': getattr(self.get_current_user(), 'username', ''),

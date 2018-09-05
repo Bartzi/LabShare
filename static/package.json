@@ -15,6 +15,7 @@
     "pluralize": "^7.0.0",
     "reconnectingwebsocket": "^1.0.0",
     "select2": "^4.0.6-rc.1",
+    "timeago": "^1.6.3",
     "yarn": "^1.9.4"
   }
 }
