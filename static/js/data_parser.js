@@ -33,10 +33,22 @@ function updateGPUData(data, currentUser) {
         processButton.prop("disabled", numGPUProcesses === 0);
 
         if (gpu.in_use) {
-            gpuRow.addClass("warning");
+            if (!gpuRow.hasClass("warning")) {
+                gpuRow.addClass("warning");
+            }
+        } else {
+            if (!gpuRow.hasClass("warning")) {
+                gpuRow.removeClass("warning");
+            }
         }
         if (gpu.failed) {
-            gpuRow.addClass("danger");
+            if (!gpuRow.hasClass("danger")) {
+                gpuRow.addClass("danger");
+            }
+        } else {
+            if (!gpuRow.hasClass("danger")) {
+                gpuRow.removeClass("danger");
+            }
         }
         showCorrectButton(gpuRow, gpu, currentUser);
     }
