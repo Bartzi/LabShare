@@ -86,7 +86,7 @@ class GPU(models.Model):
             'processes': [process.serialize() for process in self.processes.all()],
             'last_update': self.last_updated.strftime("%H:%M %d.%m"),
             'failed': self.marked_as_failed,
-            'in_user': self.in_use,
+            'in_use': self.in_use,
             'current_user': getattr(self.get_current_user(), 'username', ''),
             'next_users': [getattr(user, 'username', '') for user in self.get_next_users()]
         }
