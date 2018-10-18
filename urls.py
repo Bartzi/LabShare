@@ -15,8 +15,8 @@ urlpatterns = [
     path('gpu/<int:gpu_id>/cancel', views.gpu_cancel, name="cancel_gpu"),
     path('gpu/info', views.gpu_info, name="gpu_info"),
 
-    path('accounts/login', auth_views.login, {'template_name': 'login.html', }),
-    path(r'login/', auth_views.login, {'template_name': 'login.html', }),
+    path('accounts/login', auth_views.LoginView.as_view(template_name='login.html')),
+    path('login/', auth_views.LoginView.as_view(template_name='login.html')),
     path('view-as', views.view_as, name="view_as"),
     path('hijack/', include('hijack.urls', namespace='hijack')),
     path('', include('django.contrib.auth.urls')),
