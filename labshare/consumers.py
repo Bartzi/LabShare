@@ -20,6 +20,8 @@ class GPUInfoUpdater(WebsocketConsumer):
             publish_device_state(device, self.channel_name)
 
             self.accept()
+        else:
+            self.close()
 
     def disconnect(self, message, **kwargs):
         async_to_sync(self.channel_layer.group_discard)(

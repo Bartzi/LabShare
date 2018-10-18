@@ -1179,6 +1179,7 @@ class ConsumerTests(TestCase):
 
     def test_consumer_no_permission(self):
         self.consumer.scope['url_route']['kwargs']['device_name'] = self.device_2.name
+        self.consumer.base_send = mock.MagicMock(return_value=None)
         self.consumer.connect()
         self.mock_method.assert_not_called()
 
