@@ -738,6 +738,21 @@ class LabSharePermissionTests(WebTest):
         response = form.submit(expect_errors=True)
         self.assertEqual(response.status_code, 403)
 
+    def test_reserve_non_existent_device_and_gpu(self):
+        response = self.app.get(reverse('reserve'), user=self.user)
+
+        form = response.form
+        form['device'].force_value(['undefined'])
+        form['gpu'].force_value(['undefined'])
+
+        response = form.submit(expect_errors=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('Select a valid choice', response.body.decode('utf-8'))
+
+        form['device'].force_value([self.devices[0].name])
+        response = form.submit(expect_errors=True)
+        self.assertEqual(response.status_code, 404)
+
     def test_gpu_listing(self):
         response = self.app.get(reverse('gpus_for_device') + '?device_name={}'.format(self.devices[0].name), user=self.user, xhr=True)
         self.assertEqual(response.status_code, 200)
@@ -748,6 +763,12 @@ class LabSharePermissionTests(WebTest):
         response = self.app.get(reverse('gpus_for_device') + '?device_name={}'.format(self.devices[-1].name), user=self.staff_user, xhr=True)
         self.assertEqual(response.status_code, 200)
 
+    def test_gpu_listing_non_existing_gpu_name(self):
+        names_to_test = ['undefined', 'a_name_that_will_never_exist_at_least_we_hope_so']
+        for name in names_to_test:
+            response = self.app.get(reverse('gpus_for_device') + '?device_name={}'.format(name), user=self.user, xhr=True, expect_errors=True)
+            self.assertEqual(response.status_code, 404)
+
     def test_gpu_info(self):
         response = self.app.get(reverse('gpu_info') + '?uuid={}'.format(self.devices[0].gpus.first().uuid), user=self.user, xhr=True)
         self.assertEqual(response.status_code, 200)
@@ -757,6 +778,12 @@ class LabSharePermissionTests(WebTest):
 
         response = self.app.get(reverse('gpu_info') + '?uuid={}'.format(self.devices[-1].gpus.first().uuid), user=self.staff_user, xhr=True)
         self.assertEqual(response.status_code, 200)
+
+    def test_gpu_info_non_existent_gpu(self):
+        ids_to_test = ['undefined', 'a_name_that_will_never_exist_at_least_we_hope_so']
+        for id in ids_to_test:
+            response = self.app.get(reverse('gpu_info') + '?uuid={}'.format(id), user=self.user, xhr=True, expect_errors=True)
+            self.assertEqual(response.status_code, 404)
 
     def test_gpu_done(self):
         mommy.make(Reservation, gpu=self.devices[0].gpus.first(), user=self.user)
