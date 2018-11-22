@@ -30,7 +30,7 @@ def reserve(request):
 
     form = DeviceSelectForm(request.POST or None, devices=accessible_devices)
     if form.is_valid():
-        device = Device.objects.get(name=form.data["device"])
+        device = get_object_or_404(Device, name=form.data["device"])
         if json.loads(form.data.get("next-available-spot", "false")):
             if not device.can_be_used_by(request.user):
                 raise PermissionDenied
@@ -48,7 +48,7 @@ def reserve(request):
                 reservation.save()
                 send_reservation_mail_for(request, gpu)
         else:
-            gpu = GPU.objects.get(uuid=form.data["gpu"])
+            gpu = get_object_or_404(GPU, uuid=form.data["gpu"])
             if not gpu.device.can_be_used_by(request.user):
                 raise PermissionDenied
             reservation = Reservation(gpu=gpu, user=request.user)
@@ -75,7 +75,7 @@ def gpus(request):
     if device_name is None:
         raise Http404
 
-    device = Device.objects.get(name=device_name)
+    device = get_object_or_404(Device, name=device_name)
     if not device.can_be_used_by(request.user):
         raise PermissionDenied
 
@@ -96,7 +96,7 @@ def gpu_info(request):
     if uuid is None:
         raise Http404
 
-    gpu = GPU.objects.get(uuid=uuid)
+    gpu = get_object_or_404(GPU, uuid=uuid)
 
     if not gpu.device.can_be_used_by(request.user):
         raise PermissionDenied
