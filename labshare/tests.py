@@ -1327,41 +1327,41 @@ class FrontendOverviewDataTest(FrontendTestsBase):
 
             # 2. check that the buttons are rendered correctly
             buttons = element.find_element_by_class_name("gpu-actions")
-            hidden_elements = buttons.find_elements_by_class_name("hidden")
+            hidden_elements = buttons.find_elements_by_class_name("d-none")
             self.assertEqual(len(hidden_elements), 2)
             current_reservation = gpu.get_current_reservation()
             next_reservations = list(gpu.get_next_reservations())
             for reservation in Reservation.objects.filter(gpu=gpu, user=self.staff_user):
                 if reservation == current_reservation:
                     self.assertNotIn(
-                        "hidden",
+                        "d-none",
                         buttons.find_element_by_class_name("gpu-done-button").get_attribute("class")
                     )
                 else:
                     self.assertIn(
-                        "hidden",
+                        "d-none",
                         buttons.find_element_by_class_name("gpu-done-button").get_attribute("class")
                     )
 
                 if reservation in next_reservations:
                     self.assertNotIn(
-                        "hidden",
+                        "d-none",
                         buttons.find_element_by_class_name("gpu-cancel-button").get_attribute("class")
                     )
                 else:
                     self.assertIn(
-                        "hidden",
+                        "d-none",
                         buttons.find_element_by_class_name("gpu-cancel-button").get_attribute("class")
                     )
 
                 if reservation != current_reservation and reservation not in next_reservations:
                     self.assertNotIn(
-                        "hidden",
+                        "d-none",
                         buttons.find_element_by_class_name("gpu-reserve-button").get_attribute("class")
                     )
                 else:
                     self.assertIn(
-                        "hidden",
+                        "d-none",
                         buttons.find_element_by_class_name("gpu-reserve-button").get_attribute("class")
                     )
 
@@ -1449,14 +1449,16 @@ class FrontendOverviewReserveSyncTest(FrontendTestsBase):
             # click the reserve button
             gpu = self.driver.find_element_by_id(list(self.device_1.gpus.all())[2].uuid)
             gpu.find_element_by_class_name("gpu-reserve-button").click()
+            self.wait_for_page_load()
 
             # check that reservation appeared in new window
             self.switch_to_window(1)
+            self.wait_for_page_load()
             gpu = self.driver.find_element_by_id(list(self.device_1.gpus.all())[2].uuid)
             reserve_button = gpu.find_element_by_class_name("gpu-reserve-button")
-            self.assertIn("hidden", reserve_button.get_attribute("class"))
+            self.assertIn("d-none", reserve_button.get_attribute("class"))
             done_button = gpu.find_element_by_class_name("gpu-done-button")
-            self.assertNotIn("hidden", done_button.get_attribute("class"))
+            self.assertNotIn("d-none", done_button.get_attribute("class"))
         finally:
             self.close_all_new_windows()
 
@@ -1492,7 +1494,7 @@ class FrontendOverviewProcessListTest(FrontendTestsBase):
         process_details = process_list.find_elements_by_class_name("gpu-process-details")
 
         for process_detail, process in zip(process_details, gpu.processes.all()):
-            process_name = process_detail.find_element_by_class_name("panel-heading").text
+            process_name = process_detail.find_element_by_class_name("card-header").text
             self.assertIn(process_name, process.name)
 
             pid_text = process_detail.find_elements_by_class_name("list-group-item")[0].text
