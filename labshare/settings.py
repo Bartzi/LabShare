@@ -67,7 +67,7 @@ INSTALLED_APPS = (
     'django.contrib.staticfiles',
     'django.contrib.sites',
     'labshare',
-    'bootstrap3',
+    'bootstrap4',
     'guardian',
     'channels',
     'hijack',
@@ -76,6 +76,7 @@ INSTALLED_APPS = (
 
 LANGUAGE_CODE = 'en-us'
 LOGIN_REDIRECT_URL = "/"
+LOGIN_URL = "/login"
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',

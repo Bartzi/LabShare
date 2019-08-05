@@ -15,11 +15,11 @@ class IconNode(template.Node):
         self.icon_name = icon_name
 
     def render(self, context):
-        return "<span class=\"glyphicon glyphicon-{}\"></span> ".format(self.icon_name)
+        return "<span class=\"oi oi-{}\"></span> ".format(self.icon_name)
 
 
 def no_icon_error():
-    raise template.TemplateSyntaxError("please choose one of the icons listed here: http://getbootstrap.com/components/#glyphicons!")
+    raise template.TemplateSyntaxError("please choose one of the icons listed here: https://useiconic.com/open/!")
 
 
 @register.tag

@@ -2,7 +2,7 @@ const deviceData = {};
 const webSocketMethod = window.location.protocol === "https:" ? "wss" : "ws";
 
 function showCorrectButton(gpuRow, gpuData, currentUser) {
-    gpuRow.find("span[class*='-button']").addClass('hidden');
+    gpuRow.find("span[class*='-button']").addClass('d-none');
     let button;
     if (gpuData.current_user === currentUser) {
         // the user that is viewing this page has reserved this gpu
@@ -14,7 +14,7 @@ function showCorrectButton(gpuRow, gpuData, currentUser) {
         // user does not have a reservation yet, so he should be able to reserve a spot
         button = gpuRow.find('.gpu-reserve-button');
     }
-    button.removeClass('hidden');
+    button.removeClass('d-none');
 }
 
 function updateGPUData(data, currentUser) {
@@ -33,21 +33,21 @@ function updateGPUData(data, currentUser) {
         processButton.prop("disabled", numGPUProcesses === 0);
 
         if (gpu.in_use) {
-            if (!gpuRow.hasClass("warning")) {
-                gpuRow.addClass("warning");
+            if (!gpuRow.hasClass("alert-warning")) {
+                gpuRow.addClass("alert-warning");
             }
         } else {
-            if (gpuRow.hasClass("warning")) {
-                gpuRow.removeClass("warning");
+            if (gpuRow.hasClass("alert-warning")) {
+                gpuRow.removeClass("alert-warning");
             }
         }
         if (gpu.failed) {
-            if (!gpuRow.hasClass("danger")) {
-                gpuRow.addClass("danger");
+            if (!gpuRow.hasClass("alert-danger")) {
+                gpuRow.addClass("alert-danger");
             }
         } else {
-            if (gpuRow.hasClass("danger")) {
-                gpuRow.removeClass("danger");
+            if (gpuRow.hasClass("alert-danger")) {
+                gpuRow.removeClass("alert-danger");
             }
         }
         showCorrectButton(gpuRow, gpu, currentUser);
@@ -86,7 +86,7 @@ function setupModals() {
         const modalBody = gpuModal.find('.modal-body');
         for (const process of processes) {
             $('.gpu-process-details').clone()
-                .find('.panel-heading').html(process.name).end()
+                .find('.card-header').html(process.name).end()
                 .find('.pid').html(process.pid).end()
                 .find('.user').html(process.username).end()
                 .find('.memory').html(process.memory_usage).end()

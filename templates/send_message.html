@@ -1,16 +1,17 @@
 {% extends "base.html" %}
 
+{% load staticfiles icon %}
 {% load staticfiles %}
-{% load bootstrap3 %}
+{% load bootstrap4 %}
 
 {% block extra_css %}
     <link href="{% static "node_modules/select2/dist/css/select2.min.css" %}" rel="stylesheet" />
 {% endblock %}
 
 {% block content %}
-    <h1 class="page-header">Send Message</h1>
+    <h1 class="page-header mt-3">Send Message</h1>
 
-    <form action="{% url 'send_message' %}" method="POST">
+    <form action="{% url 'send_message' %}" method="POST" class="mt-5">
         {% csrf_token %}
         {% if user.is_staff %}
             {% bootstrap_field form.message_all_users %}
@@ -20,7 +21,7 @@
         {% bootstrap_field form.message %}
         {% buttons %}
             <button type="submit" class="btn btn-primary">
-				{% bootstrap_icon "send" %} Send
+				{% icon "envelope-closed" %} Send
 			</button>
         {% endbuttons %}
     </form>

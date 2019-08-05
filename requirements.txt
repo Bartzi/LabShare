@@ -2,7 +2,7 @@ channels >= git+https://github.com/django/channels.git@8771f6b59e05a218a6cae0e84
 channels-redis == 2.3.0
 django >= 2.1, < 2.2
 django-auth-ldap == 1.7.0
-django-bootstrap3 == 10.0.1
+django-bootstrap4 == 0.0.7
 # django-guardian == 1.4.6
 git+https://github.com/django-guardian/django-guardian.git@ac2177e4b16f7f87d65710788b522acb37df4611#egg=django-guardian
 django-hijack == 2.1.10

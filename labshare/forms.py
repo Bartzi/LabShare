@@ -1,6 +1,6 @@
 from django import forms
 from django.contrib.auth.models import User
-from django.forms import SelectMultiple
+from django.forms import SelectMultiple, Select
 
 from .utils import get_devices
 
@@ -28,4 +28,9 @@ class MessageForm(forms.Form):
 
 
 class ViewAsForm(forms.Form):
-    username = forms.ModelChoiceField(queryset=User.objects.all(), empty_label="Select a user", required=True)
+    username = forms.ModelChoiceField(
+        queryset=User.objects.all(),
+        empty_label="Select a user",
+        required=True,
+        widget=Select(attrs={"id": "username-field"})
+    )
