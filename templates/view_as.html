@@ -1,31 +1,39 @@
 {% extends "base.html" %}
 
-{% load bootstrap3 %}
+{% load staticfiles %}
+{% load bootstrap4 %}
+
+{% block extra_css %}
+    <link href="{% static "node_modules/select2/dist/css/select2.min.css" %}" rel="stylesheet" />
+{% endblock %}
 
 {% block content %}
     {{ block.super }}
-    <h1 class="page-header">View Page as a different User</h1>
+    <h1 class="page-header mt-3">View Page as a different User</h1>
 
-    <form action="" method="post" class="form-horizontal" role="form" id="user_impersonation_form">
-    {% bootstrap_form form layout='horizontal' %}
-    {% csrf_token %}
-    {% buttons %}
-    <div class="col-md-offset-2 col-md-4">
-        <button type="submit" class="btn btn-primary" disabled>
-            View page as selected user
-        </button>
+    <div class="mt-5">
+        <form action="" method="POST" class="mt-5" id="user_impersonation_form">
+            {% csrf_token %}
+            {% bootstrap_field form.username %}
+            {% buttons %}
+                <button type="submit" class="btn btn-primary" disabled>
+				    View page as selected user
+			    </button>
+            {% endbuttons %}
+        </form>
     </div>
-    {% endbuttons %}
-    </form>
 {% endblock %}
 
 {% block scripts %}
     {{ block.super }}
+    <script src="{% static "node_modules/select2/dist/js/select2.min.js" %}"></script>
 
     <script type="text/javascript">
-        $("#id_username").on('change', function() {
-            var selectedUserId = $(this).find(":selected").val();
-            var form = $('#user_impersonation_form');
+        const usernameField = $('#username-field');
+        usernameField.select2();
+        usernameField.on('select2:select', (event) => {
+            const selectedUserId = event.params.data.id;
+            const form = $('#user_impersonation_form');
             form.attr('action', 'hijack/' + selectedUserId + '/');
             form.find(":submit").prop('disabled', false);
         });
