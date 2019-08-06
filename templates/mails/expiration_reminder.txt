@@ -1,6 +1,6 @@
 Hi {{reservation.user.username}},
 
-a GPU you reserved at LabShare is expiring at {{reservation.usage_expires}} (in 48 hours).
+a GPU you reserved at LabShare is expiring on {{reservation.usage_expires|date:'l jS F Y'}} at {{reservation.usage_expires|date:'H:i'}} (in about 48 hours).
 You can extend your reservation until that time at LabShare.
 Otherwise the reservation will be removed by the system automatically at that time.
 This affects the GPU {{gpu.model_name}} belonging to {{gpu.device.name}}.
