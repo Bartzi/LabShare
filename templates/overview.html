@@ -2,18 +2,24 @@
 
 {% load staticfiles %}
 {% load icon %}
-{% load bootstrap3 %}
+{% load bootstrap4 %}
 
 {% block extra_css %}
     <!-- DataTables CSS -->
-    <link href="{% static "node_modules/datatables.net-bs/css/dataTables.bootstrap.min.css" %}" rel="stylesheet">
+    <link href="{% static "node_modules/datatables.net-bs4/css/dataTables.bootstrap4.min.css" %}" rel="stylesheet">
+
+    <style>
+        .action-button {
+            min-width: 85px;
+        }
+    </style>
 {% endblock %}
 
 {% block content %}
     <div class="col-lg-12" id="gpu-overview">
-        <div class="panel panel-default">
-            <div class="panel-body">
-                <table class="table table-hover" id="overview-table">
+        <div class="card mt-5">
+            <div class="card-body">
+                <table class="table table-sm" id="overview-table">
                     <thead>
                         <tr>
                             <th>Device</th>
@@ -29,25 +35,25 @@
                     <tbody style="background-color: #fff;">
                         {% for device in devices %}
                             {% for gpu in device.gpus.all %}
-                                <tr id="{{ gpu.uuid }}">
-                                    <td>{{ device.name }}</td>
-                                    <td>{{ gpu.model_name }}</td>
-                                    <td class="gpu-memory">- MiB / - MiB</td>
-                                    <td class="gpu-processes">
-                                        <button class="gpu-process-show btn btn-xs btn-info" disabled data-device="{{ device.name }}" data-gpu-uuid="{{ gpu.uuid }}">0 Processes</button>
+                                <tr id="{{ gpu.uuid }}" class="alert">
+                                    <td class="text-truncate align-middle">{{ device.name }}</td>
+                                    <td class="text-truncate align-middle">{{ gpu.model_name }}</td>
+                                    <td class="text-truncate align-middle gpu-memory">- MiB / - MiB</td>
+                                    <td class="text-truncate align-middle gpu-processes">
+                                        <button class="gpu-process-show btn btn-block btn-sm btn-info" disabled data-device="{{ device.name }}" data-gpu-uuid="{{ gpu.uuid }}">0 Processes</button>
                                     </td>
-                                    <td class="gpu-last-update">--</td>
-                                    <td class="gpu-current-reservation"></td>
-                                    <td class="gpu-next-reservation"></td>
-                                    <td class="gpu-actions">
-                                        <span class="gpu-done-button hidden">
-                                            <button type="button" class="action-button btn btn-xs btn-success" data-action="{% url 'done_with_gpu' gpu.id %}">Done</button>
+                                    <td class="text-truncate align-middle gpu-last-update">--</td>
+                                    <td class="text-truncate align-middle gpu-current-reservation"></td>
+                                    <td class="text-truncate align-middle gpu-next-reservation"></td>
+                                    <td class="text-truncate align-middle gpu-actions">
+                                        <span class="gpu-done-button d-none float-right">
+                                            <button type="button" class="action-button btn btn-block btn-sm btn-success" data-action="{% url 'done_with_gpu' gpu.id %}">Done</button>
                                         </span>
-                                        <span class="gpu-cancel-button hidden">
-                                            <button type="button" class="action-button btn btn-xs btn-danger" data-action="{% url 'cancel_gpu' gpu.id %}">Cancel</button>
+                                        <span class="gpu-cancel-button d-none float-right">
+                                            <button type="button" class="action-button btn btn-block btn-sm btn-danger" data-action="{% url 'cancel_gpu' gpu.id %}">Cancel</button>
                                         </span>
-                                        <span class="gpu-reserve-button">
-                                            <button type="button" class="action-button btn btn-xs btn-warning"
+                                        <span class="gpu-reserve-button float-right">
+                                            <button type="button" class="action-button btn btn-block btn-sm btn-warning"
                                                     data-gpu="{{ gpu.uuid }}" data-device="{{ device.name }}"
                                                     data-action="{% url 'reserve' %}">
                                                 Reserve
@@ -64,7 +70,7 @@
     </div>
     <!-- /.row -->
 
-    <div id="templates" class="hidden">
+    <div id="templates" class="d-none">
         {% include "process_list_base.html" %}
         {% include "process_list_body.html" %}
     </div>
@@ -74,7 +80,7 @@
     {{ block.super }}
     <!-- DataTables JavaScript -->
     <script src="{% static 'node_modules/datatables.net/js/jquery.dataTables.min.js' %}"></script>
-    <script src="{% static 'node_modules/datatables.net-bs/js/dataTables.bootstrap.min.js' %}"></script>
+    <script src="{% static 'node_modules/datatables.net-bs4/js/dataTables.bootstrap4.min.js' %}"></script>
     <script src="{% static 'node_modules/reconnectingwebsocket/reconnecting-websocket.min.js' %}"></script>
     <script src="{% static 'node_modules/pluralize/pluralize.js' %}"></script>
     <script src="{% static 'node_modules/timeago/jquery.timeago.js' %}"></script>
@@ -94,7 +100,7 @@
                 paging: false,
                 dom: 'ti',
                 "columnDefs": [
-                    {"orderable": false, "targets": [3, 7]}
+                    {"orderable": false, "targets": [2, 3, 4, 5, 6, 7]}
                 ]
             });
         });

@@ -1,14 +1,14 @@
 {% extends "base.html" %}
 
 {% block content %}
-    <div class="row">
-        <h2>Reserve the next available Spot on a device.</h2>
+    <div class="row mt-3">
+        <h1>Reserve the next available Spot on a device</h1>
     </div>
-    <div class="row">
-        <form id="reserve-form" class="form-horizontal" action="{% url "reserve" %}" method="POST">
+    <div class="row mt-5">
+        <form id="reserve-form" class="w-100" action="{% url "reserve" %}" method="POST">
             {% csrf_token %}
             <input type="hidden" name="next-available-spot" value="false">
-            <div class="form-group">
+            <div class="form-group row">
                 {%  if form.device.errors %}
                     <div class="alert alert-danger" role="alert">
                         <ul class="list-unstyled">
@@ -18,8 +18,8 @@
                         </ul>
                     </div>
                 {% endif %}
-                <label for="selectDevice" class="col-sm-2 control-label">Device</label>
-                <div class="col-sm-10">
+                <label for="selectDevice" class="col-2 col-form-label">Device</label>
+                <div class="col-10">
                     <select class="form-control" id="selectDevice" name="device">
                         {% for name, option in form.fields.device.choices %}
                             <option value="{{ name }}">{{ option }}</option>
@@ -27,7 +27,7 @@
                     </select>
                 </div>
             </div>
-            <div class="form-group">
+            <div class="form-group row">
                 {%  if form.gpu.errors %}
                     <div class="alert alert-danger" role="alert">
                         <ul class="list-unstyled">
@@ -37,30 +37,28 @@
                         </ul>
                     </div>
                 {% endif %}
-                <label for="selectGPU" class="col-sm-2 control-label">GPU</label>
-                <div class="col-sm-10">
+                <label for="selectGPU" class="col-2 col-form-label">GPU</label>
+                <div class="col-10">
                     <select class="form-control" id="selectGPU" name="gpu" disabled>
                     </select>
                 </div>
             </div>
-            <div class="form-group hidden" id="gpu-info">
-                <div class="col-sm-offset-2 col-sm-10">
-                    <span class="help-block">
-                        <div class="panel panel-default">
-                            <div class="panel-heading">GPU Info</div>
-                            <div class="panel-body">
-                                <ul class="list-group">
-                                    <li class="list-group-item">Used Memory: <span id="gpu-info-used"></span></li>
-                                    <li class="list-group-item">Total Memory: <span id="gpu-info-total"></span></li>
-                                    <li class="list-group-item">Current User: <span id="gpu-info-user"></span></li>
-                                </ul>
-                            </div>
-                        </div>
-                    </span>
+            <div class="form-group row d-none" id="gpu-info">
+                <div class="col-2"></div>
+                <div class="col-10">
+                    <div class="card">
+                        <div class="card-header">GPU Info</div>
+                        <ul class="list-group list-group-flush">
+                            <li class="list-group-item">Used Memory: <span id="gpu-info-used"></span></li>
+                            <li class="list-group-item">Total Memory: <span id="gpu-info-total"></span></li>
+                            <li class="list-group-item">Current User: <span id="gpu-info-user"></span></li>
+                        </ul>
+                    </div>
                 </div>
             </div>
-            <div class="form-group">
-                <div class="col-sm-offset-2 col-sm-10">
+            <div class="form-group row">
+                <div class="col-2"></div>
+                <div class="col-10">
                     <button type="submit" class="btn btn-primary" id="reserve-button" disabled>Reserve</button>
                     <button class="btn btn-success" id="next-available-spot-btn">Give me the next available spot on this device</button>
                 </div>
@@ -74,12 +72,12 @@
     <script type="text/javascript">
 
         function get_gpus(deviceSelect, gpuSelect) {
-            var selectedDevice = deviceSelect.find(":selected").val();
-            $.get("{% url "gpus_for_device"%}?device_name=" + selectedDevice, {}, function(data, textStatus, jqXHR) {
+            const selectedDevice = deviceSelect.find(":selected").val();
+            $.get("{% url "gpus_for_device"%}?device_name=" + selectedDevice, {}, (data) => {
                 gpuSelect.children().remove();
-                var gpus = JSON.parse(data)["gpus"];
+                const gpus = JSON.parse(data)["gpus"];
                 $.each(gpus, function(index, element) {
-                    var option = $('<option>' , {
+                    const option = $('<option>' , {
                         value: element.id,
                         text: element.name
                     });
@@ -87,20 +85,20 @@
                 });
                 gpuSelect.prop("disabled", false);
                 $('#reserve-button').prop("disabled", false);
-                gpuInfo.removeClass("hidden");
+                gpuInfo.removeClass("d-none");
                 update_gpu_info();
             });
         }
 
         function update_gpu_info() {
-            var selectedGPU = gpuSelect.find(":selected").val();
+            const selectedGPU = gpuSelect.find(":selected").val();
 
             if (typeof selectedGPU === "undefined") {
-                gpuInfo.addClass("hidden");
+                gpuInfo.addClass("d-none");
                 return;
             }
 
-            $.get("{% url "gpu_info" %}?uuid=" + selectedGPU, {}, function(data, textStatus, jqXHR) {
+            $.get("{% url "gpu_info" %}?uuid=" + selectedGPU, {}, (data) => {
                 data = JSON.parse(data);
                 $("#gpu-info-used").html(data["used"]);
                 $("#gpu-info-total").html(data["total"]);
@@ -108,21 +106,21 @@
             });
         }
 
-        var deviceSelect = $('#selectDevice');
-        var gpuSelect = $('#selectGPU');
-        var gpuInfo = $('#gpu-info');
+        const deviceSelect = $('#selectDevice');
+        const gpuSelect = $('#selectGPU');
+        const gpuInfo = $('#gpu-info');
         get_gpus(deviceSelect, gpuSelect);
 
-        deviceSelect.on('change', function() {
+        deviceSelect.on('change',() => {
             get_gpus(deviceSelect, gpuSelect);
         });
 
-        gpuSelect.on('change',  function() {
+        gpuSelect.on('change', () => {
             update_gpu_info();
         });
 
-        $("#next-available-spot-btn").on('click', function (event) {
-            var form = $("#reserve-form");
+        $("#next-available-spot-btn").on('click', () => {
+            const form = $("#reserve-form");
             form.find("input[name='next-available-spot']").attr("value", "true");
             form.submit();
         });
