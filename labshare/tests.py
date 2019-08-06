@@ -1,7 +1,7 @@
 import datetime
 import io
 import json
-import mock as mock
+import unittest.mock as mock
 import os
 import random
 import string
