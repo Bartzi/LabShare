@@ -39,7 +39,7 @@ def reserve(request):
             for gpu in device.gpus.all():
                 if gpu.reservations.count() is 0:
                     reservation = Reservation(gpu=gpu, user=request.user)
-                    reservation.usage_started(save=False)
+                    reservation.start_usage(save=False)
                     reservation.save()
                     send_gpu_done_mail(gpu, reservation)
                     return HttpResponseRedirect(reverse("index"))
@@ -56,7 +56,7 @@ def reserve(request):
             start_usage = gpu.reservations.count() is 0
             reservation = Reservation(gpu=gpu, user=request.user)
             if start_usage:
-                reservation.usage_started(save=False)
+                reservation.start_usage(save=False)
             reservation.save()
 
             send_reservation_mail_for(request, gpu)
@@ -174,7 +174,7 @@ def gpu_cancel(request, gpu_id):
 
     try:
         reservation = gpu.reservations.filter(user=request.user).latest("time_reserved")
-        if reservation != gpu.get_current_reservation():
+        if reservation == gpu.get_current_reservation():
             raise SuspiciousOperation
         reservation.delete()
         publish_device_state(gpu.device)

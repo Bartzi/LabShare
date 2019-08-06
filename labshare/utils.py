@@ -42,7 +42,7 @@ def delete_reservation(reservation):
     # get the user of the reservation that is now current and send him an email
     current_reservation = gpu.current_reservation()
     if current_reservation is not None:
-        current_reservation.usage_started()
+        current_reservation.start_usage()
         # clear all reservations made for this user if he only reserved the next available spot on this device
         if current_reservation.user_reserved_next_available_spot:
             device = current_reservation.gpu.device
@@ -222,10 +222,12 @@ def expire_reservation(reservation):
 
 
 def check_reservations():
-    for reservation in Reservation.objects.all():
+    all_reservations = Reservation.objects.all()
+    for reservation in all_reservations:
         if reservation.usage_started is None:
+            continue
+        if reservation.is_usage_expired():
+            expire_reservation(reservation)
             continue
         if reservation.needs_reminder():
             send_extension_reminder(reservation)
-        if reservation.is_usage_expired():
-            expire_reservation(reservation)

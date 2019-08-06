@@ -151,6 +151,8 @@ class Reservation(models.Model):
         return timezone.now() + self.reminder_period() > self.usage_expires
 
     def is_usage_expired(self):
+        if self.usage_expires is None:
+            return False
         return timezone.now() > self.usage_expires
 
     def extend(self):

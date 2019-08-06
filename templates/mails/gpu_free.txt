@@ -1,6 +1,6 @@
 Hi {{reservation.user.username}},
 
-The GPU you reserved at LabShare is now available for you to use until {{reservation.usage_expires}}.
+The GPU you reserved at LabShare is now available for you to use until {{reservation.usage_expires|date:'l jS F Y'}} at {{reservation.usage_expires|date:'H:i'}}.
 You reserved the GPU {{gpu.model_name}} belonging to {{gpu.device.name}}.
 You can extend your reservation 48 hours before it expires (you will get a reminder to do so).
 

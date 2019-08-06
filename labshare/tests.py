@@ -31,7 +31,8 @@ from selenium.webdriver.support.wait import WebDriverWait
 from labshare.consumers import GPUInfoUpdater
 from labshare.models import Device, GPU, Reservation, GPUProcess, EmailAddress
 from labshare.templatetags.icon import icon
-from labshare.utils import get_devices, update_gpu_info, determine_failed_gpus, publish_gpu_states, publish_device_state
+from labshare.utils import get_devices, update_gpu_info, determine_failed_gpus, publish_gpu_states, \
+    publish_device_state, check_reservations
 
 device_recipe = Recipe(
     Device,
@@ -39,13 +40,17 @@ device_recipe = Recipe(
 )
 
 
-class TestLabshare(WebTest):
+def utc_now():
+    return datetime.datetime.now(tz=datetime.timezone.utc)
+
+
+class LabshareTestSetup(WebTest):
 
     csrf_checks = False
 
     @classmethod
     def setUpTestData(cls):
-        cls.user = mommy.make(User)
+        cls.user = mommy.make(User, email="user@example.com")
         cls.devices = device_recipe.make(_quantity=3)
         mommy.make(GPU, device=cls.devices[0], _quantity=2, used_memory="12 Mib", total_memory="112 Mib")
         cls.gpu = mommy.make(GPU, device=cls.devices[1], used_memory="12 Mib", total_memory="112 Mib")
@@ -56,6 +61,9 @@ class TestLabshare(WebTest):
 
         for device in cls.devices:
             assign_perm('use_device', cls.group, device)
+
+
+class TestLabshare(LabshareTestSetup):
 
     def test_index(self):
         response = self.app.get(reverse("index"), user=self.user)
@@ -166,6 +174,10 @@ class TestLabshare(WebTest):
         self.assertEqual(response.status_code, 302)
         self.assertEqual(Reservation.objects.count(), 2)
         self.assertEqual(Reservation.objects.filter(user_reserved_next_available_spot=True).count(), 1)
+
+        # the user currently holding a reservation should receive an email
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn("user@example.com", mail.outbox[0].to)
 
     def test_get_devices(self):
         device_info = get_devices()
@@ -316,11 +328,20 @@ class TestLabshare(WebTest):
 
     def test_gpu_done_one_more_reservation(self):
         gpu = self.devices[0].gpus.first()
-        mommy.make(Reservation, _quantity=2, gpu=gpu, user=self.user, user_reserved_next_available_spot=False)
+
+        mommy.make(Reservation, gpu=gpu, user=self.user, user_reserved_next_available_spot=False)
+
+        waiting_user = mommy.make(User, email="waiting_user@example.com")
+        waiting_user.groups.add(self.group)
+        mommy.make(Reservation, gpu=gpu, user=waiting_user)
 
         response = self.app.post(reverse("done_with_gpu", args=[gpu.id]), user=self.user)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(Reservation.objects.count(), 1)
+
+        # the waiting user should receive an email
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn("waiting_user@example.com", mail.outbox[0].to)
 
     def test_gpu_done_next_available_spot_reserved(self):
         user = mommy.make(User)
@@ -388,7 +409,7 @@ class TestLabshare(WebTest):
         self.assertEqual(gpu.current_reservation().user, self.user)
         self.app.post(reverse("cancel_gpu", args=[gpu.id]), user=other)
         self.assertEqual(Reservation.objects.count(), 1)
-        self.app.post(reverse("cancel_gpu", args=[gpu.id]), user=self.user)
+        self.app.post(reverse("done_with_gpu", args=[gpu.id]), user=self.user)
         self.assertEqual(Reservation.objects.count(), 0)
         self.assertEqual(gpu.last_reservation(), None)
 
@@ -461,6 +482,133 @@ class TestLabshare(WebTest):
             device=reservation.gpu.device,
             user=reservation.user
         ))
+
+
+class TestReservationExpiration(LabshareTestSetup):
+    @classmethod
+    def setUpTestData(cls):
+        LabshareTestSetup.setUpTestData()
+        cls.other_user = mommy.make(User, email="otheruser@example.com")
+        cls.other_user.groups.add(cls.group)
+
+    def assertTimeAlmostEqual(self, a, b):
+        self.assertLess(abs(a - b), timedelta(seconds=1))
+
+    def make_and_check_new_reservation(self, user, device_num=0):
+        previous_num_reservations = Reservation.objects.count()
+
+        response = self.app.get(reverse("reserve"), user=user)
+        self.assertEqual(response.status_code, 200)
+
+        form = response.form
+        form["device"].force_value(self.devices[device_num].name)
+        form["gpu"].force_value(self.devices[device_num].gpus.first().uuid)
+        form["next-available-spot"] = "false"
+
+        response = form.submit()
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(Reservation.objects.count(), previous_num_reservations + 1)
+
+    def make_reservation_in_the_past(self, user, device, distance):
+        with mock.patch("django.utils.timezone.now") as mock_now:
+            mock_now.return_value = utc_now() - distance
+            reservation = mommy.make(Reservation, gpu=device, user=user)
+            reservation.start_usage()
+        return reservation
+
+    def test_new_reservation(self):
+        reservation = mommy.make(Reservation, gpu=self.gpu, user=self.user)
+        self.assertIsNone(reservation.usage_started)
+        self.assertIsNone(reservation.usage_expires)
+        self.assertFalse(reservation.is_usage_expired())
+
+        reservation.start_usage()
+        self.assertTimeAlmostEqual(reservation.usage_started, utc_now())
+        self.assertTimeAlmostEqual(reservation.usage_expires, utc_now() + Reservation.usage_period())
+
+    def test_expiring_reservation(self):
+        back_to_the_future = Reservation.usage_period() - (Reservation.reminder_period() + timedelta(minutes=1))
+        reservation = self.make_reservation_in_the_past(self.user, self.gpu, back_to_the_future)
+
+        self.assertFalse(reservation.is_usage_expired())
+        self.assertFalse(reservation.needs_reminder())
+
+        with mock.patch("django.utils.timezone.now") as mock_now:
+            mock_now.return_value = utc_now() + timedelta(minutes=2)
+            self.assertFalse(reservation.is_usage_expired())
+            self.assertTrue(reservation.needs_reminder())
+
+        with mock.patch("django.utils.timezone.now") as mock_now:
+            mock_now.return_value = utc_now() + timedelta(hours=49)
+            self.assertTrue(reservation.is_usage_expired())
+            self.assertTrue(reservation.needs_reminder())
+
+    def test_extending_reservation(self):
+        reservation = self.make_reservation_in_the_past(self.user, self.gpu,
+                                                        Reservation.usage_period() - Reservation.reminder_period())
+
+        self.assertTrue(reservation.needs_reminder())
+        reservation.set_reminder_sent()
+        self.assertTrue(reservation.extension_reminder_sent)
+
+        reservation.extend()
+        self.assertFalse(reservation.needs_reminder())
+        self.assertFalse(reservation.extension_reminder_sent)
+        self.assertTimeAlmostEqual(reservation.usage_expires, utc_now() + Reservation.usage_period())
+
+    def test_usage_starting(self):
+        self.make_and_check_new_reservation(self.user)
+
+        first_reservation = Reservation.objects.first()
+        self.assertTimeAlmostEqual(first_reservation.time_reserved, first_reservation.usage_started)
+        self.assertTimeAlmostEqual(abs(first_reservation.usage_expires - first_reservation.usage_started),
+                                   Reservation.usage_period())
+        self.assertFalse(first_reservation.extension_reminder_sent)
+
+        self.make_and_check_new_reservation(self.other_user)
+
+        second_reservation = Reservation.objects.last()
+        self.assertEqual(None, second_reservation.usage_started)
+        self.assertEqual(None, second_reservation.usage_expires)
+        self.assertFalse(second_reservation.extension_reminder_sent)
+
+    def test_expiration_updating(self):
+        reservation = self.make_reservation_in_the_past(self.user, self.gpu, Reservation.usage_period())
+        check_reservations()
+        self.assertNotIn(reservation, Reservation.objects.all())
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to[0], "user@example.com")
+
+    def test_expiration_reminding(self):
+        reservation = self.make_reservation_in_the_past(self.user, self.gpu,
+                                                        Reservation.usage_period() - Reservation.reminder_period())
+        check_reservations()
+        self.assertEqual(reservation, Reservation.objects.first())
+        reservation = Reservation.objects.first()
+
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to[0], "user@example.com")
+        self.assertTrue(reservation.extension_reminder_sent)
+
+    def test_expiration_no_double_reminding(self):
+        reservation = self.make_reservation_in_the_past(self.user, self.gpu,
+                                                        Reservation.usage_period() - Reservation.reminder_period())
+        reservation.set_reminder_sent()
+        check_reservations()
+        self.assertEqual(reservation, Reservation.objects.first())
+        reservation = Reservation.objects.first()
+
+        self.assertEqual(len(mail.outbox), 0)
+        self.assertTrue(reservation.extension_reminder_sent)
+
+    def test_expiration_nothing(self):
+        reservation = self.make_reservation_in_the_past(self.user, self.gpu, timedelta(days=2))
+        check_reservations()
+        self.assertEqual(reservation, Reservation.objects.first())
+        reservation = Reservation.objects.first()
+
+        self.assertEqual(len(mail.outbox), 0)
+        self.assertFalse(reservation.extension_reminder_sent)
 
 
 class TestMessages(WebTest):
@@ -811,15 +959,27 @@ class LabSharePermissionTests(WebTest):
         self.assertEqual(response.status_code, 400)
 
     def test_gpu_cancel(self):
+        current_user = mommy.make(User)
+        current_user.groups.add(self.student_group)
+
+        mommy.make(Reservation, gpu=self.devices[0].gpus.first(), user=current_user)
         mommy.make(Reservation, gpu=self.devices[0].gpus.first(), user=self.user)
+
+        # the user who holds the current reservation is not allowed to cancel (only mark as done)
+        response = self.app.post(reverse("cancel_gpu", args=[self.devices[0].gpus.first().id]), user=current_user,
+                                 expect_errors=True)
+        self.assertEqual(response.status_code, 400)
+
+        # other users later in the queue can cancel
         response = self.app.post(reverse("cancel_gpu", args=[self.devices[0].gpus.first().id]), user=self.user)
         self.assertEqual(response.status_code, 200)
 
+        mommy.make(Reservation, gpu=self.devices[-1].gpus.first(), user=current_user)
         mommy.make(Reservation, gpu=self.devices[-1].gpus.first(), user=self.staff_user)
         response = self.app.post(reverse("cancel_gpu", args=[self.devices[-1].gpus.first().id]), user=self.user,
-                                expect_errors=True)
+                                 expect_errors=True)
         self.assertEqual(response.status_code, 403)
-        self.assertEqual(Reservation.objects.count(), 1)
+        self.assertEqual(Reservation.objects.count(), 3)
 
         response = self.app.post(reverse("cancel_gpu", args=[self.devices[-1].gpus.first().id]), user=self.staff_user)
         self.assertEqual(response.status_code, 200)
@@ -993,7 +1153,7 @@ class FailedGPUTests(TestCase):
 
     def setUp(self):
         with mock.patch("django.utils.timezone.now") as mock_now:
-            mock_now.return_value = datetime.datetime.now(tz=datetime.timezone.utc) - datetime.timedelta(hours=2)
+            mock_now.return_value = utc_now() - datetime.timedelta(hours=2)
             self.gpu_1 = mommy.make(GPU)
         self.gpu_2 = mommy.make(GPU)
         self.user = mommy.make(User)
@@ -1042,7 +1202,7 @@ class FailedGPUTests(TestCase):
     def test_already_failed_gpu_no_resend(self):
         self.gpu_1.marked_as_failed = True
         with mock.patch("django.utils.timezone.now") as mock_now:
-            mock_now.return_value = datetime.datetime.now(tz=datetime.timezone.utc) - datetime.timedelta(hours=2)
+            mock_now.return_value = utc_now() - datetime.timedelta(hours=2)
             self.gpu_1.save()
 
         determine_failed_gpus()
@@ -1051,7 +1211,7 @@ class FailedGPUTests(TestCase):
     def test_multiple_failed_gpus(self):
         mommy.make(Reservation, user=self.user, gpu=self.gpu_1)
         with mock.patch("django.utils.timezone.now") as mock_now:
-            mock_now.return_value = datetime.datetime.now(tz=datetime.timezone.utc) - datetime.timedelta(hours=2)
+            mock_now.return_value = utc_now() - datetime.timedelta(hours=2)
             self.gpu_2.model_name = "new name to force date change"
             self.gpu_2.save()
 
@@ -1073,7 +1233,7 @@ class FailedGPUTests(TestCase):
     def test_already_failed_gpu_no_resend_but_send_new_fail(self):
         self.gpu_1.marked_as_failed = True
         with mock.patch("django.utils.timezone.now") as mock_now:
-            mock_now.return_value = datetime.datetime.now(tz=datetime.timezone.utc) - datetime.timedelta(hours=2)
+            mock_now.return_value = utc_now() - datetime.timedelta(hours=2)
             self.gpu_1.save()
             self.gpu_2.model_name = "new name to force date change"
             self.gpu_2.save()
