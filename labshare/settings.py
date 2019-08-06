@@ -1,13 +1,16 @@
 # Build paths inside the project like this: os.path.join(BASE_DIR, ...)
 import os
 
+import ldap
+from django_auth_ldap.config import LDAPSearch, GroupOfNamesType
+
 ADMINS = ()
 ALLOWED_HOSTS = []
 
 ASGI_APPLICATION = "labshare.routing.application"
 
 AUTHENTICATION_BACKENDS = (
-    'django.contrib.auth.backends.ModelBackend', # this is default
+    'django.contrib.auth.backends.ModelBackend',  # this is default
     'labshare.backends.authentication.ldap.LDAPBackend',
     'guardian.backends.ObjectPermissionBackend',
 )
@@ -18,6 +21,18 @@ AUTH_LDAP_USER_ATTR_MAP = {
     "username": "uid",
     "email": "mail"
 }
+AUTH_LDAP_SERVER_URI = "ldaps://example.com"
+AUTH_LDAP_USER_SEARCH = LDAPSearch("ou=People,dc=example,dc=com", ldap.SCOPE_SUBTREE, "(uid=%(user)s)")
+
+AUTH_LDAP_GROUP_SEARCH = LDAPSearch(
+    "ou=Group,dc=example,dc=com", ldap.SCOPE_SUBTREE, "(objectClass=groupOfNames)"
+)
+AUTH_LDAP_GROUP_TYPE = GroupOfNamesType()
+
+AUTH_LDAP_GROUP_MAP = {
+    "cn=staff,ou=group,dc=example,dc=com": "Staff"
+}
+AUTH_LDAP_DEFAULT_GROUP_NAME = ""
 
 
 CHANNEL_LAYERS = {
