@@ -82,6 +82,9 @@ class GPU(models.Model):
         return "{used} / {total}".format(used=self.used_memory, total=self.total_memory)
 
     def serialize(self):
+        extension_possible = False
+        if self.get_current_reservation() is not None:
+            extension_possible = self.get_current_reservation().is_extension_possible()
         return {
             'name': self.model_name,
             'uuid': self.uuid,
@@ -91,6 +94,7 @@ class GPU(models.Model):
             'failed': self.marked_as_failed,
             'in_use': self.in_use,
             'current_user': getattr(self.get_current_user(), 'username', ''),
+            'extension_possible': extension_possible,
             'next_users': [getattr(user, 'username', '') for user in self.get_next_users()]
         }
 
@@ -146,7 +150,12 @@ class Reservation(models.Model):
             self.save(update_fields=["usage_started", "usage_expires"])
 
     def needs_reminder(self):
-        if self.extension_reminder_sent or self.usage_started is None:
+        if self.extension_reminder_sent:
+            return False
+        return self.is_extension_possible()
+
+    def is_extension_possible(self):
+        if self.usage_started is None:
             return False
         return timezone.now() + self.reminder_period() > self.usage_expires
 
