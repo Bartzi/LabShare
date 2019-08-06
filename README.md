@@ -5,7 +5,7 @@ Django Tool that helps everyone to get their fair share of GPU time.
 ## Installation
 
 1. clone repository
-2. install requirements with `pip install -r requirements.txt` (make sure to use python 3!)
+2. install requirements with `pip install -r requirements.txt` (make sure to use python 3 (>=3.6)!)
 3. start a redis server instance (you can use a docker container and start it ith the following command: `docker run -p 6379:6379 -d redis:2.8`)
 3. create database by running `python manage.py migrate`
 4. Install [Yarn](https://yarnpkg.com/en/docs/install)
@@ -15,6 +15,7 @@ Django Tool that helps everyone to get their fair share of GPU time.
 ## Usage
 
 1. create superuser by running `python manage.py createsuperuser`
+2. If you want to have more users, you can create them using the Admin WebInterface (`/admin`).
 2. deploy the `device_query` script on every machine that has a GPU that shall be monitored
     * You can restrict the ip address that is allowed to access data provided by a device query script by adding the following command line switch while starting the device query script `-ac <ip-address-of-main-server>`
 3. create a new `Device` in the django admin for every device you want to monitor
