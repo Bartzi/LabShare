@@ -1,0 +1,7 @@
+Hi {{reservation.user.username}},
+
+one of your reservations you made at LabShare has expired.
+This affects the GPU {{gpu.model_name}} belonging to {{gpu.device.name}}.
+
+Best Regards,
+LabShare

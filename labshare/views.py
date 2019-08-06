@@ -11,7 +11,8 @@ from django.urls import reverse
 from django.views.decorators.csrf import ensure_csrf_cookie
 
 from .forms import DeviceSelectForm, MessageForm, ViewAsForm
-from labshare.utils import send_reservation_mail_for, send_gpu_done_mail, login_required_ajax, publish_device_state
+from labshare.utils import send_reservation_mail_for, send_gpu_done_mail, login_required_ajax, publish_device_state, \
+    delete_reservation
 from .models import Device, Reservation, GPU
 from labshare.decorators import render_to
 
@@ -38,8 +39,9 @@ def reserve(request):
             for gpu in device.gpus.all():
                 if gpu.reservations.count() is 0:
                     reservation = Reservation(gpu=gpu, user=request.user)
+                    reservation.usage_started(save=False)
                     reservation.save()
-                    send_gpu_done_mail(request, gpu, reservation)
+                    send_gpu_done_mail(gpu, reservation)
                     return HttpResponseRedirect(reverse("index"))
 
             # if there is no gpu available right now reserve all on this device and mark them as special reservation
@@ -51,7 +53,10 @@ def reserve(request):
             gpu = get_object_or_404(GPU, uuid=form.data["gpu"])
             if not gpu.device.can_be_used_by(request.user):
                 raise PermissionDenied
+            start_usage = gpu.reservations.count() is 0
             reservation = Reservation(gpu=gpu, user=request.user)
+            if start_usage:
+                reservation.usage_started(save=False)
             reservation.save()
 
             send_reservation_mail_for(request, gpu)
@@ -130,27 +135,30 @@ def gpu_done(request, gpu_id):
     if current_reservation.user != request.user:
         raise PermissionDenied
 
-    current_reservation.delete()
+    delete_reservation(current_reservation)
 
-    # get the user of the reservation that is now current and send him an email
+    return HttpResponse()
+
+
+@login_required
+def gpu_extend(request, gpu_id):
+    gpu = get_object_or_404(GPU, pk=gpu_id)
+
+    if request.method != "POST":
+        raise SuspiciousOperation
+
+    if not gpu.device.can_be_used_by(request.user):
+        raise PermissionDenied
+
     current_reservation = gpu.current_reservation()
-    if current_reservation is not None:
-        # clear all reservations made for this user if he only reserved the next available spot on this device
-        if current_reservation.user_reserved_next_available_spot:
-            device = current_reservation.gpu.device
-            reservations_to_delete = []
-            for gpu in device.gpus.all():
-                for reservation in gpu.reservations.all():
-                    if reservation == current_reservation:
-                        continue
-                    elif reservation.user == current_reservation.user and reservation.user_reserved_next_available_spot:
-                        reservations_to_delete.append(reservation)
 
-            for reservation in reservations_to_delete:
-                reservation.delete()
+    if current_reservation is None:
+        raise Http404
 
-        send_gpu_done_mail(request, gpu, current_reservation)
-    publish_device_state(gpu.device)
+    if current_reservation.user != request.user:
+        raise PermissionDenied
+
+    current_reservation.extend()
 
     return HttpResponse()
 
@@ -166,6 +174,8 @@ def gpu_cancel(request, gpu_id):
 
     try:
         reservation = gpu.reservations.filter(user=request.user).latest("time_reserved")
+        if reservation != gpu.get_current_reservation():
+            raise SuspiciousOperation
         reservation.delete()
         publish_device_state(gpu.device)
     except ObjectDoesNotExist as e:
