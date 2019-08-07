@@ -44,6 +44,14 @@ def utc_now():
     return datetime.datetime.now(tz=datetime.timezone.utc)
 
 
+def make_reservation_in_the_past(user, gpu, distance):
+    with mock.patch("django.utils.timezone.now") as mock_now:
+        mock_now.return_value = utc_now() - distance
+        reservation = mommy.make(Reservation, gpu=gpu, user=user)
+        reservation.start_usage()
+    return reservation
+
+
 class LabshareTestSetup(WebTest):
 
     csrf_checks = False
@@ -509,13 +517,6 @@ class TestReservationExpiration(LabshareTestSetup):
         self.assertEqual(response.status_code, 302)
         self.assertEqual(Reservation.objects.count(), previous_num_reservations + 1)
 
-    def make_reservation_in_the_past(self, user, device, distance):
-        with mock.patch("django.utils.timezone.now") as mock_now:
-            mock_now.return_value = utc_now() - distance
-            reservation = mommy.make(Reservation, gpu=device, user=user)
-            reservation.start_usage()
-        return reservation
-
     def test_new_reservation(self):
         reservation = mommy.make(Reservation, gpu=self.gpu, user=self.user)
         self.assertIsNone(reservation.usage_started)
@@ -528,7 +529,7 @@ class TestReservationExpiration(LabshareTestSetup):
 
     def test_expiring_reservation(self):
         back_to_the_future = Reservation.usage_period() - (Reservation.reminder_period() + timedelta(minutes=1))
-        reservation = self.make_reservation_in_the_past(self.user, self.gpu, back_to_the_future)
+        reservation = make_reservation_in_the_past(self.user, self.gpu, back_to_the_future)
 
         self.assertFalse(reservation.is_usage_expired())
         self.assertFalse(reservation.needs_reminder())
@@ -544,7 +545,7 @@ class TestReservationExpiration(LabshareTestSetup):
             self.assertTrue(reservation.needs_reminder())
 
     def test_extending_reservation(self):
-        reservation = self.make_reservation_in_the_past(self.user, self.gpu,
+        reservation = make_reservation_in_the_past(self.user, self.gpu,
                                                         Reservation.usage_period() - Reservation.reminder_period())
 
         self.assertTrue(reservation.needs_reminder())
@@ -555,6 +556,27 @@ class TestReservationExpiration(LabshareTestSetup):
         self.assertFalse(reservation.needs_reminder())
         self.assertFalse(reservation.extension_reminder_sent)
         self.assertTimeAlmostEqual(reservation.usage_expires, utc_now() + Reservation.usage_period())
+
+    def test_extend_gpu(self):
+        make_reservation_in_the_past(self.user, self.gpu,
+                                          Reservation.usage_period() - Reservation.reminder_period())
+
+        self.app.post(reverse("extend_gpu", args=[self.gpu.id]), user=self.user)
+        self.assertEqual(Reservation.objects.count(), 1)
+        reservation = Reservation.objects.first()
+        self.assertTimeAlmostEqual(reservation.usage_expires, utc_now() + Reservation.usage_period())
+
+    def test_extend_not_allowed_too_early(self):
+        reservation = make_reservation_in_the_past(self.user, self.gpu,
+                                                        Reservation.usage_period() - Reservation.reminder_period() * 2)
+        previous_expiry = reservation.usage_expires
+
+        response = self.app.post(reverse("extend_gpu", args=[self.gpu.id]), user=self.user, expect_errors=True)
+        self.assertEqual(response.status_code, 400)
+
+        self.assertEqual(Reservation.objects.count(), 1)
+        reservation = Reservation.objects.first()
+        self.assertTimeAlmostEqual(reservation.usage_expires, previous_expiry)
 
     def test_usage_starting(self):
         self.make_and_check_new_reservation(self.user)
@@ -572,16 +594,16 @@ class TestReservationExpiration(LabshareTestSetup):
         self.assertEqual(None, second_reservation.usage_expires)
         self.assertFalse(second_reservation.extension_reminder_sent)
 
-    def test_expiration_updating(self):
-        reservation = self.make_reservation_in_the_past(self.user, self.gpu, Reservation.usage_period())
+    def test_reservation_checking_updating(self):
+        reservation = make_reservation_in_the_past(self.user, self.gpu, Reservation.usage_period())
         check_reservations()
         self.assertNotIn(reservation, Reservation.objects.all())
         self.assertEqual(len(mail.outbox), 1)
         self.assertEqual(mail.outbox[0].to[0], "user@example.com")
 
-    def test_expiration_reminding(self):
-        reservation = self.make_reservation_in_the_past(self.user, self.gpu,
-                                                        Reservation.usage_period() - Reservation.reminder_period())
+    def test_reservation_checking_reminding(self):
+        reservation = make_reservation_in_the_past(self.user, self.gpu,
+                                                   Reservation.usage_period() - Reservation.reminder_period())
         check_reservations()
         self.assertEqual(reservation, Reservation.objects.first())
         reservation = Reservation.objects.first()
@@ -590,9 +612,9 @@ class TestReservationExpiration(LabshareTestSetup):
         self.assertEqual(mail.outbox[0].to[0], "user@example.com")
         self.assertTrue(reservation.extension_reminder_sent)
 
-    def test_expiration_no_double_reminding(self):
-        reservation = self.make_reservation_in_the_past(self.user, self.gpu,
-                                                        Reservation.usage_period() - Reservation.reminder_period())
+    def test_reservation_checking_no_double_reminding(self):
+        reservation = make_reservation_in_the_past(self.user, self.gpu,
+                                                   Reservation.usage_period() - Reservation.reminder_period())
         reservation.set_reminder_sent()
         check_reservations()
         self.assertEqual(reservation, Reservation.objects.first())
@@ -601,8 +623,8 @@ class TestReservationExpiration(LabshareTestSetup):
         self.assertEqual(len(mail.outbox), 0)
         self.assertTrue(reservation.extension_reminder_sent)
 
-    def test_expiration_nothing(self):
-        reservation = self.make_reservation_in_the_past(self.user, self.gpu, timedelta(days=2))
+    def test_reservation_checking_nothing(self):
+        reservation = make_reservation_in_the_past(self.user, self.gpu, timedelta(days=2))
         check_reservations()
         self.assertEqual(reservation, Reservation.objects.first())
         reservation = Reservation.objects.first()
@@ -1572,13 +1594,14 @@ class FrontendTestsBase(ChannelsLiveServerTestCase):
         cls.user.save()
 
         cls.device_1 = device_recipe.make()
-        gpus = mommy.make(GPU, device=cls.device_1, _quantity=3)
+        gpus = mommy.make(GPU, device=cls.device_1, _quantity=4)
         mommy.make(GPUProcess, gpu=gpus[0])
         mommy.make(GPUProcess, gpu=gpus[1])
         mommy.make(Reservation, user=cls.staff_user, gpu=gpus[0])
         mommy.make(Reservation, user=cls.user, gpu=gpus[1])
         mommy.make(Reservation, user=cls.staff_user, gpu=gpus[1])
         assign_perm('labshare.use_device', cls.user, cls.device_1)
+        make_reservation_in_the_past(cls.staff_user, gpus[3], Reservation.usage_period() - timedelta(days=1))
 
         cls.device_2 = device_recipe.make()
         gpus = mommy.make(GPU, device=cls.device_2, _quantity=2)
@@ -1648,11 +1671,11 @@ class FrontendOverviewDataTest(FrontendTestsBase):
             # 2. check that the buttons are rendered correctly
             buttons = element.find_element_by_class_name("gpu-actions")
             hidden_elements = buttons.find_elements_by_class_name("d-none")
-            self.assertEqual(len(hidden_elements), 2)
+            self.assertEqual(len(hidden_elements), 3)
             current_reservation = gpu.get_current_reservation()
             next_reservations = list(gpu.get_next_reservations())
             for reservation in Reservation.objects.filter(gpu=gpu, user=self.staff_user):
-                if reservation == current_reservation:
+                if reservation == current_reservation and not reservation.is_extension_possible():
                     self.assertNotIn(
                         "d-none",
                         buttons.find_element_by_class_name("gpu-done-button").get_attribute("class")
@@ -1661,6 +1684,17 @@ class FrontendOverviewDataTest(FrontendTestsBase):
                     self.assertIn(
                         "d-none",
                         buttons.find_element_by_class_name("gpu-done-button").get_attribute("class")
+                    )
+
+                if reservation == current_reservation and reservation.is_extension_possible():
+                    self.assertNotIn(
+                        "d-none",
+                        buttons.find_element_by_class_name("gpu-extend-button-group").get_attribute("class")
+                    )
+                else:
+                    self.assertIn(
+                        "d-none",
+                        buttons.find_element_by_class_name("gpu-extend-button-group").get_attribute("class")
                     )
 
                 if reservation in next_reservations:
@@ -1711,8 +1745,56 @@ class FrontendOverviewDoneButtonTest(FrontendTestsBase):
         num_reservations_for_user = Reservation.objects.filter(user=self.staff_user).count()
         gpu = self.driver.find_element_by_id(self.device_1.gpus.first().uuid)
         done_button = gpu.find_element_by_class_name("gpu-done-button")
-        self.assertNotIn("hidden", done_button.get_attribute("class"))
+        self.assertNotIn("d-none", done_button.get_attribute("class"))
         done_button.click()
+
+        self.wait_for_page_load()
+        self.assertEqual(Reservation.objects.filter(user=self.staff_user).count(), num_reservations_for_user - 1)
+
+
+@skipIf("TRAVIS" in os.environ and os.environ["TRAVIS"] == "true", "Skipping this test on Travis CI.")
+class FrontendOverviewExtendButtonTest(FrontendTestsBase):
+
+    def test_extend_button(self):
+        self.wait_for_page_load()
+
+        gpu = self.driver.find_element_by_id(self.device_1.gpus.last().uuid)
+        extend_button_group = gpu.find_element_by_class_name("gpu-extend-button-group")
+        self.assertNotIn("d-none", extend_button_group.get_attribute("class"))
+        extend_button = extend_button_group.find_element_by_class_name("gpu-extend-button")
+        extend_button.click()
+
+        self.wait_for_page_load()
+        reservation = Reservation.objects.filter(gpu=self.device_1.gpus.last()).first()
+        self.assertGreater(abs(utc_now() - reservation.usage_expires), Reservation.usage_period() - timedelta(minutes=1))
+
+        gpu = self.driver.find_element_by_id(self.device_1.gpus.last().uuid)
+        extend_button_group = gpu.find_element_by_class_name("gpu-extend-button-group")
+        self.assertIn("d-none", extend_button_group.get_attribute("class"))
+
+        done_button = gpu.find_element_by_class_name("gpu-done-button")
+        self.assertNotIn("d-none", done_button.get_attribute("class"))
+
+
+@skipIf("TRAVIS" in os.environ and os.environ["TRAVIS"] == "true", "Skipping this test on Travis CI.")
+class FrontendOverviewDropdownButtonTest(FrontendTestsBase):
+
+    def test_dropdown_done_button(self):
+        self.wait_for_page_load()
+
+        self.driver.implicitly_wait(1)
+
+        num_reservations_for_user = Reservation.objects.filter(user=self.staff_user).count()
+        gpu = self.driver.find_element_by_id(self.device_1.gpus.last().uuid)
+
+        extend_button_group = gpu.find_element_by_class_name("gpu-extend-button-group")
+        self.assertNotIn("d-none", extend_button_group.get_attribute("class"))
+
+        dropdown_toggle_button = extend_button_group.find_element_by_class_name("dropdown-toggle")
+        dropdown_toggle_button.click()
+
+        done_entry = extend_button_group.find_element_by_class_name("dropdown-item")
+        done_entry.click()
 
         self.wait_for_page_load()
         self.assertEqual(Reservation.objects.filter(user=self.staff_user).count(), num_reservations_for_user - 1)
@@ -1727,7 +1809,7 @@ class FrontendOverviewCancelButtonTest(FrontendTestsBase):
         num_reservations_for_user = Reservation.objects.filter(user=self.staff_user).count()
         gpu = self.driver.find_element_by_id(list(self.device_1.gpus.all())[1].uuid)
         cancel_button = gpu.find_element_by_class_name("gpu-cancel-button")
-        self.assertNotIn("hidden", cancel_button.get_attribute("class"))
+        self.assertNotIn("d-none", cancel_button.get_attribute("class"))
         cancel_button.click()
 
         self.wait_for_page_load()
@@ -1743,7 +1825,7 @@ class FrontendOverviewReserveButtonTest(FrontendTestsBase):
         num_reservations_for_user = Reservation.objects.filter(user=self.staff_user).count()
         gpu = self.driver.find_element_by_id(list(self.device_1.gpus.all())[2].uuid)
         reserve_button = gpu.find_element_by_class_name("gpu-reserve-button")
-        self.assertNotIn("hidden", reserve_button.get_attribute("class"))
+        self.assertNotIn("d-none", reserve_button.get_attribute("class"))
         reserve_button.click()
 
         self.wait_for_page_load()
