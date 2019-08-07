@@ -9,7 +9,7 @@
     <link href="{% static "node_modules/datatables.net-bs4/css/dataTables.bootstrap4.min.css" %}" rel="stylesheet">
 
     <style>
-        .action-button {
+        .action-button-appearance {
             min-width: 85px;
         }
     </style>
@@ -45,26 +45,26 @@
                                     <td class="text-truncate align-middle gpu-last-update">--</td>
                                     <td class="text-truncate align-middle gpu-current-reservation"></td>
                                     <td class="text-truncate align-middle gpu-next-reservation"></td>
-                                    <td class="text-truncate align-middle gpu-actions">
+                                    <td class="align-middle gpu-actions">
                                         <span class="gpu-extend-button-group d-none float-right">
-                                            <div class="btn-group extension-group">
-                                                <button type="button" class="action-button btn btn-block btn-sm btn-info" data-action="{% url 'done_with_gpu' gpu.id %}">Extend</button>
-                                                <button type="button" class="btn btn-info dropdown-toggle dropdown-toggle-split" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                                            <div class="action-button-appearance btn-group extension-group">
+                                                <button type="button" class="action-button btn btn-block btn-sm btn-info" data-action="{% url 'extend_gpu' gpu.id %}">Extend</button>
+                                                <button type="button" class="btn btn-sm btn-info dropdown-toggle dropdown-toggle-split" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
                                                     <span class="sr-only">Toggle Dropdown</span>
                                                 </button>
-                                            <div class="dropdown-menu">
-                                                <button type="button" class="action-button btn btn-block btn-sm btn-success" data-action="{% url 'done_with_gpu' gpu.id %}">Done</button>
+                                            <div class="dropdown-menu action-button-appearance dropdown-menu-right">
+                                                <button type="button" class="dropdown-item action-button btn-sm" data-action="{% url 'done_with_gpu' gpu.id %}">Done</button>
                                             </div>
                                             </div>
                                         </span>
                                         <span class="gpu-done-button d-none float-right">
-                                            <button type="button" class="action-button btn btn-block btn-sm btn-success" data-action="{% url 'done_with_gpu' gpu.id %}">Done</button>
+                                            <button type="button" class="action-button action-button-appearance btn btn-block btn-sm btn-success" data-action="{% url 'done_with_gpu' gpu.id %}">Done</button>
                                         </span>
                                         <span class="gpu-cancel-button d-none float-right">
-                                            <button type="button" class="action-button btn btn-block btn-sm btn-danger" data-action="{% url 'cancel_gpu' gpu.id %}">Cancel</button>
+                                            <button type="button" class="action-button action-button-appearance btn btn-block btn-sm btn-danger" data-action="{% url 'cancel_gpu' gpu.id %}">Cancel</button>
                                         </span>
                                         <span class="gpu-reserve-button float-right">
-                                            <button type="button" class="action-button btn btn-block btn-sm btn-warning"
+                                            <button type="button" class="action-button action-button-appearance btn btn-block btn-sm btn-warning"
                                                     data-gpu="{{ gpu.uuid }}" data-device="{{ device.name }}"
                                                     data-action="{% url 'reserve' %}">
                                                 Reserve

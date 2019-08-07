@@ -158,7 +158,10 @@ def gpu_extend(request, gpu_id):
     if current_reservation.user != request.user:
         raise PermissionDenied
 
-    current_reservation.extend()
+    if not current_reservation.extend():
+        raise SuspiciousOperation
+
+    publish_device_state(current_reservation.gpu.device)
 
     return HttpResponse()
 
