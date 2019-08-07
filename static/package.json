@@ -8,14 +8,13 @@
   "license": "GPLv2",
   "private": true,
   "dependencies": {
-    "add": "^2.0.6",
     "bootstrap": "^4.3.1",
     "datatables.net-bs4": "^1.10.19",
-    "jquery": "^3.3.1",
+    "jquery": "^3.4.1",
     "open-iconic": "^1.1.1",
-    "pluralize": "^7.0.0",
+    "pluralize": "^8.0.0",
     "reconnectingwebsocket": "^1.0.0",
-    "select2": "^4.0.6-rc.1",
+    "select2": "^4.0.8",
     "timeago": "^1.6.3",
     "yarn": "^1.9.4"
   }
