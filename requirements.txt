@@ -1,12 +1,12 @@
-channels >= git+https://github.com/django/channels.git@8771f6b59e05a218a6cae0e84e5708493d469b4f
-channels-redis == 2.3.0
-django >= 2.1, < 2.2
-django-auth-ldap == 1.7.0
-django-bootstrap4 == 0.0.7
-# django-guardian == 1.4.6
-git+https://github.com/django-guardian/django-guardian.git@ac2177e4b16f7f87d65710788b522acb37df4611#egg=django-guardian
+channels == 2.2.0
+channels-redis == 2.4.0
+django >= 2.2, < 2.3
+django-auth-ldap == 2.0.0
+django-bootstrap4 == 0.0.8
+django-guardian == 2.0.0
 django-hijack == 2.1.10
-django-webtest == 1.9.3
+django-webtest == 1.9.7
 model_mommy == 1.6.0
-python-coveralls == 2.9.1
-selenium == 3.14.0
+coveralls==1.8.2
+selenium == 3.141.0
+pyaml==19.4.1
