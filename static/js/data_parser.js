@@ -5,11 +5,11 @@ function showCorrectButton(gpuRow, gpuData, currentUser) {
     gpuRow.find("span[class*='-button']").addClass('d-none');
     let button;
     if (gpuData.current_user === currentUser) {
+        // the user that is viewing this page has reserved this gpu
         if (gpuData.extension_possible) {
-            // the user that is viewing this page has reserved this gpu
+            // show extend and dropdown menu
             button = gpuRow.find('.gpu-extend-button-group');
         } else {
-            // the user that is viewing this page has reserved this gpu
             button = gpuRow.find('.gpu-done-button');
         }
     } else if (gpuData.next_users.includes(currentUser)) {

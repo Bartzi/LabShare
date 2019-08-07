@@ -65,14 +65,12 @@ def send_gpu_done_mail(gpu, reservation):
     email_addresses = [address.email for address in reservation.user.email_addresses.all()]
     email_addresses.append(reservation.user.email)
 
-    email_template = loader.get_template("mails/gpu_free.txt")
-    email = EmailMessage(
-        subject="GPU free for use",
-        body=email_template.render({'reservation': reservation, "gpu": gpu}),
-        from_email=settings.DEFAULT_FROM_EMAIL,
-        to=email_addresses,
+    send_mail(
+        "GPU free for use",
+        loader.get_template("mails/gpu_free.txt").render({'reservation': reservation, "gpu": gpu}),
+        settings.DEFAULT_FROM_EMAIL,
+        email_addresses
     )
-    email.send()
 
 
 def login_required_ajax(function=None, redirect_field_name=None):
@@ -195,14 +193,12 @@ def send_extension_reminder(reservation):
     email_addresses = [address.email for address in reservation.user.email_addresses.all()]
     email_addresses.append(reservation.user.email)
 
-    email_template = loader.get_template("mails/expiration_reminder.txt")
-    email = EmailMessage(
-        subject="GPU reservation is expiring",
-        body=email_template.render({'reservation': reservation, "gpu": reservation.gpu}),
-        from_email=settings.DEFAULT_FROM_EMAIL,
-        to=email_addresses,
+    send_mail(
+        "GPU reservation is expiring",
+        loader.get_template("mails/expiration_reminder.txt").render({'reservation': reservation, "gpu": reservation.gpu}),
+        settings.DEFAULT_FROM_EMAIL,
+        email_addresses
     )
-    email.send()
     reservation.set_reminder_sent()
 
 
@@ -211,14 +207,12 @@ def expire_reservation(reservation):
     email_addresses = [address.email for address in reservation.user.email_addresses.all()]
     email_addresses.append(reservation.user.email)
 
-    email_template = loader.get_template("mails/usage_expired.txt")
-    email = EmailMessage(
-        subject="GPU reservation expired",
-        body=email_template.render({'reservation': reservation, "gpu": reservation.gpu}),
-        from_email=settings.DEFAULT_FROM_EMAIL,
-        to=email_addresses,
+    send_mail(
+        "GPU reservation expired",
+        loader.get_template("mails/usage_expired.txt").render({'reservation': reservation, "gpu": reservation.gpu}),
+        settings.DEFAULT_FROM_EMAIL,
+        email_addresses,
     )
-    email.send()
 
 
 def check_reservations():

@@ -349,7 +349,7 @@ class TestLabshare(LabshareTestSetup):
 
         # the waiting user should receive an email
         self.assertEqual(len(mail.outbox), 1)
-        self.assertIn("waiting_user@example.com", mail.outbox[0].to)
+        self.assertIn(waiting_user.email, mail.outbox[0].to)
 
     def test_gpu_done_next_available_spot_reserved(self):
         user = mommy.make(User)
@@ -1751,6 +1751,10 @@ class FrontendOverviewDoneButtonTest(FrontendTestsBase):
         self.wait_for_page_load()
         self.assertEqual(Reservation.objects.filter(user=self.staff_user).count(), num_reservations_for_user - 1)
 
+        gpu = self.driver.find_element_by_id(self.device_1.gpus.first().uuid)
+        reserve_button = gpu.find_element_by_class_name("gpu-reserve-button")
+        self.assertNotIn("d-none", reserve_button.get_attribute("class"))
+
 
 @skipIf("TRAVIS" in os.environ and os.environ["TRAVIS"] == "true", "Skipping this test on Travis CI.")
 class FrontendOverviewExtendButtonTest(FrontendTestsBase):
@@ -1798,6 +1802,10 @@ class FrontendOverviewDropdownButtonTest(FrontendTestsBase):
 
         self.wait_for_page_load()
         self.assertEqual(Reservation.objects.filter(user=self.staff_user).count(), num_reservations_for_user - 1)
+
+        gpu = self.driver.find_element_by_id(self.device_1.gpus.last().uuid)
+        reserve_button = gpu.find_element_by_class_name("gpu-reserve-button")
+        self.assertNotIn("d-none", reserve_button.get_attribute("class"))
 
 
 @skipIf("TRAVIS" in os.environ and os.environ["TRAVIS"] == "true", "Skipping this test on Travis CI.")
