@@ -495,7 +495,7 @@ class TestLabshare(LabshareTestSetup):
 class TestReservationExpiration(LabshareTestSetup):
     @classmethod
     def setUpTestData(cls):
-        LabshareTestSetup.setUpTestData()
+        super().setUpTestData()
         cls.other_user = mommy.make(User, email="otheruser@example.com")
         cls.other_user.groups.add(cls.group)
 
