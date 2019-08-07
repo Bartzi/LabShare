@@ -13,6 +13,7 @@ urlpatterns = [
     path('gpus', views.gpus, name="gpus_for_device"),
     path('gpu/<int:gpu_id>/done', views.gpu_done, name="done_with_gpu"),
     path('gpu/<int:gpu_id>/cancel', views.gpu_cancel, name="cancel_gpu"),
+    path('gpu/<int:gpu_id>/extend', views.gpu_extend, name="extend_gpu"),
     path('gpu/info', views.gpu_info, name="gpu_info"),
 
     path('accounts/login', auth_views.LoginView.as_view(template_name='login.html')),

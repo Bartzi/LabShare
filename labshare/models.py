@@ -165,9 +165,12 @@ class Reservation(models.Model):
         return timezone.now() > self.usage_expires
 
     def extend(self):
+        if not self.is_extension_possible():
+            return False
         self.usage_expires = timezone.now() + self.usage_period()
         self.extension_reminder_sent = False
         self.save(update_fields=["usage_expires", "extension_reminder_sent"])
+        return True
 
     def set_reminder_sent(self):
         self.extension_reminder_sent = True
