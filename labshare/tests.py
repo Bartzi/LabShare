@@ -4,6 +4,7 @@ import json
 import os
 import random
 import string
+import time
 import unittest.mock as mock
 from datetime import timedelta
 from unittest import skipIf
@@ -1655,6 +1656,7 @@ class FrontendOverviewDataTest(FrontendTestsBase):
 
     def test_overview_gpu_data_correct(self):
         self.wait_for_page_load()
+        time.sleep(0.5)
 
         for gpu in GPU.objects.all():
             # 1. check that the elements look correct
@@ -1768,6 +1770,8 @@ class FrontendOverviewExtendButtonTest(FrontendTestsBase):
         extend_button = extend_button_group.find_element_by_class_name("gpu-extend-button")
         extend_button.click()
 
+        time.sleep(0.5)
+
         self.wait_for_page_load()
         reservation = Reservation.objects.filter(gpu=self.device_1.gpus.last()).first()
         self.assertGreater(abs(utc_now() - reservation.usage_expires), Reservation.usage_period() - timedelta(minutes=1))
@@ -1797,10 +1801,13 @@ class FrontendOverviewDropdownButtonTest(FrontendTestsBase):
         dropdown_toggle_button = extend_button_group.find_element_by_class_name("dropdown-toggle")
         dropdown_toggle_button.click()
 
+        time.sleep(0.5)
+
         done_entry = extend_button_group.find_element_by_class_name("dropdown-item")
         done_entry.click()
 
         self.wait_for_page_load()
+        time.sleep(0.5)
         self.assertEqual(Reservation.objects.filter(user=self.staff_user).count(), num_reservations_for_user - 1)
 
         gpu = self.driver.find_element_by_id(self.device_1.gpus.last().uuid)
@@ -1821,6 +1828,7 @@ class FrontendOverviewCancelButtonTest(FrontendTestsBase):
         cancel_button.click()
 
         self.wait_for_page_load()
+        time.sleep(0.5)
         self.assertEqual(Reservation.objects.filter(user=self.staff_user).count(), num_reservations_for_user - 1)
 
 
@@ -1837,6 +1845,7 @@ class FrontendOverviewReserveButtonTest(FrontendTestsBase):
         reserve_button.click()
 
         self.wait_for_page_load()
+        time.sleep(0.5)
         self.assertEqual(Reservation.objects.filter(user=self.staff_user).count(), num_reservations_for_user + 1)
 
 
@@ -1865,6 +1874,9 @@ class FrontendOverviewReserveSyncTest(FrontendTestsBase):
             self.switch_to_window(1)
             self.wait_for_page_load()
             gpu = self.driver.find_element_by_id(list(self.device_1.gpus.all())[2].uuid)
+
+            time.sleep(0.5)
+
             reserve_button = gpu.find_element_by_class_name("gpu-reserve-button")
             self.assertIn("d-none", reserve_button.get_attribute("class"))
             done_button = gpu.find_element_by_class_name("gpu-done-button")
