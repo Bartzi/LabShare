@@ -1,17 +1,21 @@
 import datetime
 import io
 import json
-import unittest.mock as mock
 import os
 import random
 import string
+import unittest.mock as mock
+from datetime import timedelta
+from unittest import skipIf
+from unittest.mock import Mock
+from urllib.error import URLError
+
 from channels.layers import get_channel_layer
 from channels.testing import ChannelsLiveServerTestCase
-from datetime import timedelta
 from django import template
 from django.contrib.auth.models import User, Group
 from django.core import mail
-from django.test import TestCase, override_settings
+from django.test import TestCase, override_settings, Client
 from django.urls import reverse
 from django_webtest import WebTest
 from guardian.shortcuts import assign_perm
@@ -23,9 +27,6 @@ from selenium.common.exceptions import NoSuchElementException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.wait import WebDriverWait
-from unittest import skipIf
-from unittest.mock import Mock
-from urllib.error import URLError
 
 from labshare.consumers import GPUInfoUpdater
 from labshare.models import Device, GPU, Reservation, GPUProcess, EmailAddress
@@ -1227,6 +1228,165 @@ class ConsumerTests(TestCase):
         self.consumer.send = mock.MagicMock()
         self.consumer.update_info({"message": message})
         self.consumer.send.assert_called_with(text_data=message)
+
+
+ldap_staff_name = "Staff"
+ldap_student_name = "Student"
+
+auth_ldap_group_map = {
+    "cn=Staff,ou=group,dc=example,dc=com": ldap_staff_name
+}
+auth_ldap_default_group_name = ldap_student_name
+
+
+@override_settings(AUTH_LDAP_GROUP_MAP=auth_ldap_group_map, AUTH_LDAP_DEFAULT_GROUP_NAME=auth_ldap_default_group_name)
+class LDAPTests(WebTest):
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.staff_group = Group.objects.get(name=ldap_staff_name)
+        cls.student_group = mommy.make(Group, name=ldap_student_name)
+
+        cls.device = device_recipe.make()
+        assign_perm('labshare.use_device', cls.staff_group, cls.device)
+
+        cls.username = "test"
+        cls.password = "test"
+
+    def get_ldap_user_result(self, email_addresses=('test2@example.com',), group_name=None):
+        def side_effect(*args, **kwargs):
+            if len(args) == 1:
+                # likely a group search
+                if group_name is None:
+                    return []
+                return [(
+                    'cn={group_name},ou=group,dc=example,dc=com'.format(group_name=group_name),
+                    {
+                        "objectclass": ['groupOfNames'],
+                        "member": ['uid=test,ou=people,dc=example,dc=com'],
+                        "cn": [group_name],
+                    }
+                )]
+            return [(
+                'uid=test,ou=people,dc=example,dc=com',
+                {
+                    "objectclass": ['top', 'person', 'organizationalPerson', 'inetOrgPerson', 'posixAccount', 'shadowAccount'],
+                    "sn": ['test'],
+                    "cn": ['test'],
+                    'uidnumber': ['1'],
+                    'uid': ['test'],
+                    'mail': list(email_addresses),
+                }
+            )]
+        return side_effect
+
+    def test_ldap_new_user_created_on_login(self):
+        self.assertEqual(User.objects.count(), 1)
+        self.assertEqual(Group.objects.get(name=ldap_student_name).user_set.count(), 0)
+        with mock.patch('django_auth_ldap.config.LDAPSearch.execute') as mocked_execute:
+            mocked_execute.side_effect = self.get_ldap_user_result()
+            with mock.patch('django_auth_ldap.backend._LDAPUser._bind_as') as mocked_bind:
+                mocked_bind.return_value = None
+
+                client = Client()
+                client.login(username=self.username, password=self.password)
+
+                self.assertEqual(User.objects.count(), 2)
+                self.assertEqual(Group.objects.get(name=ldap_student_name).user_set.count(), 1)
+
+    def test_ldap_new_user_created_with_group(self):
+        self.assertEqual(User.objects.count(), 1)
+        self.assertEqual(Group.objects.get(name=ldap_staff_name).user_set.count(), 0)
+        self.assertEqual(Group.objects.get(name=ldap_student_name).user_set.count(), 0)
+        with mock.patch('django_auth_ldap.config.LDAPSearch.execute') as mocked_execute:
+            mocked_execute.side_effect = self.get_ldap_user_result(group_name=ldap_staff_name)
+            with mock.patch('django_auth_ldap.backend._LDAPUser._bind_as') as mocked_bind:
+                mocked_bind.return_value = None
+
+                client = Client()
+                client.login(username=self.username, password=self.password)
+
+                self.assertEqual(User.objects.count(), 2)
+                self.assertEqual(Group.objects.get(name=ldap_staff_name).user_set.count(), 1)
+                self.assertEqual(Group.objects.get(name=ldap_student_name).user_set.count(), 0)
+
+    def test_ldap_change_mail_addresses(self):
+        with mock.patch('django_auth_ldap.config.LDAPSearch.execute') as mocked_execute:
+            mocked_execute.side_effect = self.get_ldap_user_result()
+            with mock.patch('django_auth_ldap.backend._LDAPUser._bind_as') as mocked_bind:
+                mocked_bind.return_value = None
+
+                client = Client()
+                client.login(username=self.username, password=self.password)
+
+                test_email_address = 'testtest@example.com'
+                mocked_execute.side_effect = self.get_ldap_user_result(email_addresses=[test_email_address])
+                self.assertNotEqual(User.objects.get(username=self.username).email, test_email_address)
+
+                client.logout()
+                client.login(username=self.username, password=self.password)
+
+                self.assertEqual(User.objects.get(username=self.username).email, test_email_address)
+
+    def test_ldap_add_multiple_mail_addresses(self):
+        with mock.patch('django_auth_ldap.config.LDAPSearch.execute') as mocked_execute:
+            mocked_execute.side_effect = self.get_ldap_user_result(email_addresses=['t@t.com', 'test@test.com', 'test@example.com'])
+            with mock.patch('django_auth_ldap.backend._LDAPUser._bind_as') as mocked_bind:
+                mocked_bind.return_value = None
+
+                client = Client()
+                client.login(username=self.username, password=self.password)
+
+                user = User.objects.get(username=self.username)
+                self.assertEqual(EmailAddress.objects.filter(user=user).count(), 2)
+
+    def test_ldap_change_multiple_mail_addresses(self):
+        with mock.patch('django_auth_ldap.config.LDAPSearch.execute') as mocked_execute:
+            mocked_execute.side_effect = self.get_ldap_user_result(email_addresses=['t@t.com', 'test@example.com'])
+            with mock.patch('django_auth_ldap.backend._LDAPUser._bind_as') as mocked_bind:
+                mocked_bind.return_value = None
+
+                client = Client()
+                client.login(username=self.username, password=self.password)
+
+                user = User.objects.get(username=self.username)
+                self.assertEqual(EmailAddress.objects.filter(user=user).count(), 1)
+
+                addresses = ['test@de.de', 'test@example.com', 'test@huhu.com']
+                mocked_execute.side_effect = self.get_ldap_user_result(email_addresses=addresses)
+
+                client.logout()
+                client.login(username=self.username, password=self.password)
+
+                user = User.objects.get(username=self.username)
+                user_mail_addresses = EmailAddress.objects.filter(user=user)
+                self.assertEqual(user_mail_addresses.count(), 2)
+                self.assertEqual(user.email, addresses[0])
+                for mail_address in user_mail_addresses.all():
+                    self.assertIn(mail_address.email, addresses[1:])
+
+    def test_ldap_change_group_membership(self):
+        self.assertEqual(Group.objects.get(name=ldap_student_name).user_set.count(), 0)
+        self.assertEqual(Group.objects.get(name=ldap_staff_name).user_set.count(), 0)
+
+        with mock.patch('django_auth_ldap.config.LDAPSearch.execute') as mocked_execute:
+            mocked_execute.side_effect = self.get_ldap_user_result()
+            with mock.patch('django_auth_ldap.backend._LDAPUser._bind_as') as mocked_bind:
+                mocked_bind.return_value = None
+
+                client = Client()
+                client.login(username=self.username, password=self.password)
+
+                self.assertEqual(Group.objects.get(name=ldap_student_name).user_set.count(), 1)
+                self.assertEqual(Group.objects.get(name=ldap_staff_name).user_set.count(), 0)
+
+                mocked_execute.side_effect = self.get_ldap_user_result(group_name=ldap_staff_name)
+
+                client.logout()
+                client.login(username=self.username, password=self.password)
+
+                self.assertEqual(Group.objects.get(name=ldap_student_name).user_set.count(), 0)
+                self.assertEqual(Group.objects.get(name=ldap_staff_name).user_set.count(), 1)
 
 
 class FrontendTestsBase(ChannelsLiveServerTestCase):
