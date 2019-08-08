@@ -49,7 +49,7 @@ coverage.xml
 
 # Django stuff:
 *.log
-*.sqlite3
+*.sqlite3*
 localsettings.py
 
 # Sphinx documentation
