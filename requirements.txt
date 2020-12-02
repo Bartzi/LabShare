@@ -10,3 +10,4 @@ model_mommy == 1.6.0
 coveralls==1.8.2
 selenium == 3.141.0
 pyaml==19.4.1
+djangorestframework==3.12.2

@@ -44,7 +44,6 @@ CHANNEL_LAYERS = {
     },
 }
 
-
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
@@ -87,6 +86,8 @@ INSTALLED_APPS = (
     'channels',
     'hijack',
     'compat',
+    'rest_framework',
+    'rest_framework.authtoken',
 )
 
 LANGUAGE_CODE = 'en-us'
@@ -102,6 +103,12 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
+
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework.authentication.TokenAuthentication',
+    )
+}
 
 ROOT_URLCONF = 'urls'
 

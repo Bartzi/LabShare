@@ -1,3 +1,4 @@
+import configparser
 import json
 import pwd
 from time import sleep
@@ -54,8 +55,17 @@ def get_owner_for_pid(pid):
 
 
 def main():
-    server_url = "http://localhost:8080"  # TODO: https?
-    post_interval = 5
+
+    # TODO: how should this script be called? Cron job enough or dedicated logic better?
+    server_url = "http://localhost:8000/gpu/update"  # TODO: https?
+    post_interval = 5  # TODO: choose fitting value or make configurable
+    device_name = "test_server"  # TODO: set dynamically
+
+    # TODO: generate and write auth token into file somehow - setup function that pulls token from endpoint?
+    config = configparser.ConfigParser()
+    config.read("config.ini")
+    auth_token = config["MAIN"]["token"]
+    headers = {"Authorization": f"Token {auth_token}"}
 
     with open("nvidia-smi-output.xml", "r") as nvidia_data_file:
         raw_gpu_data = nvidia_data_file.read()
@@ -63,10 +73,14 @@ def main():
     # raw_gpu_data = subprocess.check_output(["nvidia-smi", "-x", "-q"]).decode('utf-8')
     gpu_data = parse_nvidia_xml(raw_gpu_data)
 
-    post_data = bytes(json.dumps(gpu_data, indent=4), 'utf-8')
+    post_data = {
+        "gpu_data": gpu_data,
+        "device_name": device_name
+    }
+    encoded_post_data = bytes(json.dumps(post_data, indent=4), 'utf-8')
     # while True:  # TODO
-    for i in range(3):
-        r = requests.post(server_url, data=post_data)
+    for i in range(1):
+        r = requests.post(server_url, headers=headers, data=encoded_post_data)
         sleep(post_interval)
 
 

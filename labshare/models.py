@@ -11,7 +11,6 @@ from django.utils import timezone
 
 class Device(models.Model):
     name = models.CharField(max_length=255)
-    ip_address = models.GenericIPAddressField()
 
     class Meta:
         permissions = (
