@@ -196,8 +196,8 @@ def gpu_cancel(request, gpu_id):
 @permission_classes((IsAuthenticated,))
 def update_gpu_info(request):
     # TODO: scratch function in util file
+    # TODO: delete old device_query script and rename
     # TODO: validate with mock data that contain processes
-    # TODO: increase SECURE_HSTS_SECONDS if used
     if request.method != "POST":
         raise SuspiciousOperation
 

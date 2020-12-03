@@ -6,11 +6,15 @@ from django.conf import settings
 from django.contrib.auth.models import User
 from django.contrib.contenttypes.models import ContentType
 from django.db import models
+from django.db.models.signals import post_save
+from django.dispatch import receiver
 from django.utils import timezone
+from rest_framework.authtoken.models import Token
 
 
 class Device(models.Model):
     name = models.CharField(max_length=255)
+    user = models.OneToOneField(User, on_delete=models.CASCADE)  # TODO: fallback for already created devices
 
     class Meta:
         permissions = (
@@ -30,6 +34,26 @@ class Device(models.Model):
             'name': self.name,
             'gpus': [gpu.serialize() for gpu in self.gpus.all()]
         }
+
+
+# TODO: can probably go because devices are only created via admin interface
+# @receiver(post_save, sender=Device)
+# def create_device_user(sender, instance, created, **kwargs):
+#     if created:
+#         username = instance.name + "_user"
+#         user = User.objects.create_user(username)
+#         instance.user = user
+
+
+@receiver(post_save, sender=Device)
+def save_device_user(sender, instance, **kwargs):
+    instance.user.save()
+
+
+@receiver(post_save, sender=Device)
+def create_device_auth_token(sender, instance=None, created=False, **kwargs):
+    if created:
+        Token.objects.create(user=instance.user)
 
 
 class GPU(models.Model):
