@@ -63,8 +63,7 @@ def main():
 
     server_url = config["MAIN"]["server_url"]  # TODO: https - in the end
     update_interval = int(config["MAIN"]["update_interval"])
-    device_name = socket.gethostname()
-    device_name = "test_device"  #TODO: remove
+    device_name = config["MAIN"]["device_name"]
 
     auth_token = config["MAIN"]["token"]
     if auth_token == "":
