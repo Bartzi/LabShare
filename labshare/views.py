@@ -195,6 +195,7 @@ def gpu_cancel(request, gpu_id):
 @authentication_classes((TokenAuthentication,))
 @permission_classes((IsAuthenticated,))
 def update_gpu_info(request):
+    # TODO: django tests?
     # TODO: scratch function in util file
     # TODO: delete old device_query script and rename
     # TODO: validate with mock data that contain processes
@@ -203,12 +204,7 @@ def update_gpu_info(request):
 
     data = json.loads(request.read().decode("utf-8"))
     device_name = data["device_name"]
-    try:
-        device = Device.objects.get(name=device_name)
-    except Device.DoesNotExist:
-        # First time encountering device
-        device = Device(name=device_name)
-        device.save()
+    device = Device.objects.get(name=device_name)  # Device should exist because it's authorized
 
     for gpu_data in data["gpu_data"]:
         gpu = GPU.objects.filter(device=device, uuid=gpu_data["uuid"])
