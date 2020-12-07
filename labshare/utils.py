@@ -94,53 +94,6 @@ def login_required_ajax(function=None, redirect_field_name=None):
         return _decorator(function)
 
 
-def update_gpu_info():
-    for device in Device.objects.all():
-        try:
-            ip_address = device.ip_address
-            response = urllib.request.urlopen("http://{}:12000".format(ip_address), timeout=10).read().decode('utf-8')
-            gpus = json.loads(response)
-            for gpu_data in gpus:
-                gpu = GPU.objects.filter(device=device, uuid=gpu_data["uuid"])
-
-                gpu_in_use = True if gpu_data.get("in_use", "na") == "yes" else False
-                if gpu_data.get("in_use", "na") == "na":
-                    # assume that device is in use if more than 800 MiB of video ram are in use
-                    gpu_in_use = int(gpu_data["memory"]["used"].split()[0]) > 800
-
-                if not gpu.exists():
-                    gpu = GPU(
-                        device=device,
-                        model_name=gpu_data["name"],
-                        uuid=gpu_data["uuid"],
-                        used_memory=gpu_data["memory"]["used"],
-                        total_memory=gpu_data["memory"]["total"],
-                        in_use=gpu_in_use,
-                    )
-                else:
-                    gpu = gpu.get()
-                    memory_info = gpu_data["memory"]
-                    gpu.used_memory = memory_info["used"]
-                    gpu.total_memory = memory_info["total"]
-                    gpu.in_use = gpu_in_use
-                    gpu.marked_as_failed = False
-                gpu.save()
-
-                gpu.processes.all().delete()
-                if gpu_in_use:
-                    # save processes if this is supported by the GPU
-                    for process in gpu_data.get('processes', []):
-                        GPUProcess(
-                            gpu=gpu,
-                            name=process.get("name", "Unknown"),
-                            pid=int(process.get("pid", "0")),
-                            memory_usage=process.get("used_memory", "Unknown"),
-                            username=process.get("username", "Unknown"),
-                        ).save()
-        except Exception as e:
-            print(e, file=sys.stderr)
-
-
 def determine_failed_gpus():
     # gather all GPUs that have not been updated in a while and notify users + admin of possible problems
     failed_gpus = filter(lambda gpu: gpu.last_update_too_long_ago() and not gpu.marked_as_failed, GPU.objects.all())
