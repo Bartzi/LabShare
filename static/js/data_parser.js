@@ -1,28 +1,9 @@
 const deviceData = {};
 const webSocketMethod = window.location.protocol === "https:" ? "wss" : "ws";
 
-function showCorrectButton(gpuRow, gpuData, currentUser) {
-    gpuRow.find("span[class*='-button']").addClass('d-none');
-    let button;
-    if (gpuData.current_user === currentUser) {
-        // the user that is viewing this page has reserved this gpu
-        if (gpuData.extension_possible) {
-            // show extend and dropdown menu
-            button = gpuRow.find('.gpu-extend-button-group');
-        } else {
-            button = gpuRow.find('.gpu-done-button');
-        }
-    } else if (gpuData.next_users.includes(currentUser)) {
-        // the user is in the queue, so he should be able to cancel his reservation
-        button = gpuRow.find('.gpu-cancel-button');
-    } else {
-        // user does not have a reservation yet, so he should be able to reserve a spot
-        button = gpuRow.find('.gpu-reserve-button');
-    }
-    button.removeClass('d-none');
-}
-
 function updateGPUData(data, currentUser) {
+    let any_gpu_in_use = false;
+    let any_gpu_failed = false;
     for (let gpu of data.gpus) {
         const gpuRow = $('#' + gpu.uuid);
         gpuRow.find('.gpu-memory').html(gpu.memory);
@@ -41,6 +22,7 @@ function updateGPUData(data, currentUser) {
             if (!gpuRow.hasClass("alert-warning")) {
                 gpuRow.addClass("alert-warning");
             }
+            any_gpu_in_use = true;
         } else {
             if (gpuRow.hasClass("alert-warning")) {
                 gpuRow.removeClass("alert-warning");
@@ -50,13 +32,39 @@ function updateGPUData(data, currentUser) {
             if (!gpuRow.hasClass("alert-danger")) {
                 gpuRow.addClass("alert-danger");
             }
+            any_gpu_failed = true;
         } else {
             if (gpuRow.hasClass("alert-danger")) {
                 gpuRow.removeClass("alert-danger");
             }
         }
-        showCorrectButton(gpuRow, gpu, currentUser);
     }
+
+    const deviceHeading = $('#' + data.name + '_heading');
+    const deviceHeadingButton = deviceHeading.find('device-heading-btn')
+    if (any_gpu_in_use) {
+        if (!deviceHeading.hasClass("alert-warning")) {
+            deviceHeading.addClass("alert-warning");
+            deviceHeadingButton.addClass("alert-warning");
+        }
+    } else {
+        if (deviceHeading.hasClass("alert-warning")) {
+            deviceHeading.removeClass("alert-warning");
+            deviceHeadingButton.removeClass("alert-warning");
+        }
+    }
+    if (any_gpu_failed) {
+        if (!deviceHeading.hasClass("alert-danger")) {
+            deviceHeading.addClass("alert-danger");
+            deviceHeadingButton.addClass("alert-danger");
+        }
+    } else {
+        if (deviceHeading.hasClass("alert-danger")) {
+            deviceHeading.removeClass("alert-danger");
+            deviceHeadingButton.removeClass("alert-danger");
+        }
+    }
+
 }
 
 function setupActionButtons() {

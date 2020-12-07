@@ -1035,10 +1035,6 @@ class EmailAddressTests(WebTest):
             self.assertEqual(str(address), address_info)
 
 
-def fail_url(url, timeout=None):
-    raise URLError("400")
-
-
 def working_gpu_data_with_one_gpu_not_in_use():
     return [
         {
@@ -1086,10 +1082,6 @@ def working_gpu_data_with_one_gpu_use_na_true():
 
 
 def request_data(device_name, data_function):
-    # return json.dumps({
-    #     "gpu_data": data_function(),
-    #     "device_name": device_name
-    # })
     return {
         "gpu_data": data_function(),
         "device_name": device_name

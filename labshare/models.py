@@ -36,15 +36,6 @@ class Device(models.Model):
         }
 
 
-# TODO: can probably go because devices are only created via admin interface
-# @receiver(post_save, sender=Device)
-# def create_device_user(sender, instance, created, **kwargs):
-#     if created:
-#         username = instance.name + "_user"
-#         user = User.objects.create_user(username)
-#         instance.user = user
-
-
 @receiver(post_save, sender=Device)
 def save_device_user(sender, instance, **kwargs):
     instance.user.save()

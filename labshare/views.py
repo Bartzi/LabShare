@@ -195,9 +195,6 @@ def gpu_cancel(request, gpu_id):
 @authentication_classes((TokenAuthentication,))
 @permission_classes((IsAuthenticated,))
 def update_gpu_info(request):
-    # TODO: django tests?
-    # TODO: scratch function in util file
-    # TODO: delete old device_query script and rename
     # TODO: validate with mock data that contain processes
     if request.method != "POST":
         raise SuspiciousOperation
