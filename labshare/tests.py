@@ -24,8 +24,7 @@ from guardian.utils import get_anonymous_user
 from model_bakery import baker
 from model_bakery.recipe import Recipe
 from rest_framework import status
-from rest_framework.authtoken.models import Token
-from rest_framework.test import APITestCase, RequestsClient
+from rest_framework.test import APITestCase
 from selenium import webdriver
 from selenium.common.exceptions import NoSuchElementException
 from selenium.webdriver.common.by import By
@@ -35,7 +34,7 @@ from selenium.webdriver.support.wait import WebDriverWait
 from labshare.consumers import GPUInfoUpdater
 from labshare.models import Device, GPU, Reservation, GPUProcess, EmailAddress
 from labshare.templatetags.icon import icon
-from labshare.utils import get_devices, update_gpu_info, determine_failed_gpus, publish_gpu_states, \
+from labshare.utils import get_devices, determine_failed_gpus, publish_gpu_states, \
     publish_device_state, check_reservations
 
 device_recipe = Recipe(
@@ -1108,24 +1107,11 @@ def return_bytes_io(func):
 
 class UpdateGPUTests(APITestCase):
 
-    # TODO use bakery
     def setUp(self):
         self.device = device_recipe.make()
         self.url = reverse("update_gpu_info")
         user = self.device.user
         self.client.force_authenticate(user=user)
-
-    # TODO: add functionality for broken GPUs --> send nothing and trigger something on labshare server after 30 min
-    @mock.patch("urllib.request.urlopen", fail_url)
-    def test_update_gpu_info_no_gpu_works(self):
-        baker.make(Device)
-        for device in Device.objects.all():
-            baker.make(GPU, device=device, _quantity=2)
-        pre_call_last_update = [gpu.last_updated for gpu in GPU.objects.all()]
-        update_gpu_info()
-        post_call_last_update = [gpu.last_updated for gpu in GPU.objects.all()]
-        for timestamp_before_call, timestamp_after_call in zip(pre_call_last_update, post_call_last_update):
-            self.assertEqual(timestamp_before_call, timestamp_after_call)
 
     def test_update_gpu_info_new_gpu(self):
         self.assertEqual(GPU.objects.count(), 0)
