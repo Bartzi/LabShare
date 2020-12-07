@@ -21,8 +21,8 @@ from django.urls import reverse
 from django_webtest import WebTest
 from guardian.shortcuts import assign_perm
 from guardian.utils import get_anonymous_user
-from model_mommy import mommy
-from model_mommy.recipe import Recipe
+from model_bakery import baker
+from model_bakery.recipe import Recipe
 from rest_framework import status
 from rest_framework.authtoken.models import Token
 from rest_framework.test import APITestCase, RequestsClient
@@ -52,7 +52,7 @@ def utc_now():
 def make_reservation_in_the_past(user, gpu, distance):
     with mock.patch("django.utils.timezone.now") as mock_now:
         mock_now.return_value = utc_now() - distance
-        reservation = mommy.make(Reservation, gpu=gpu, user=user)
+        reservation = baker.make(Reservation, gpu=gpu, user=user)
         reservation.start_usage()
     return reservation
 
@@ -62,13 +62,13 @@ class LabshareTestSetup(WebTest):
 
     @classmethod
     def setUpTestData(cls):
-        cls.user = mommy.make(User, email="user@example.com")
+        cls.user = baker.make(User, email="user@example.com")
         cls.devices = device_recipe.make(_quantity=3)
-        mommy.make(GPU, device=cls.devices[0], _quantity=2, used_memory="12 Mib", total_memory="112 Mib")
-        cls.gpu = mommy.make(GPU, device=cls.devices[1], used_memory="12 Mib", total_memory="112 Mib")
-        mommy.make(GPU, device=cls.devices[-1], used_memory="12 Mib", total_memory="112 Mib")
+        baker.make(GPU, device=cls.devices[0], _quantity=2, used_memory="12 Mib", total_memory="112 Mib")
+        cls.gpu = baker.make(GPU, device=cls.devices[1], used_memory="12 Mib", total_memory="112 Mib")
+        baker.make(GPU, device=cls.devices[-1], used_memory="12 Mib", total_memory="112 Mib")
 
-        cls.group = mommy.make(Group)
+        cls.group = baker.make(Group)
         cls.user.groups.add(cls.group)
 
         for device in cls.devices:
@@ -123,7 +123,7 @@ class TestLabshare(LabshareTestSetup):
         self.assertEqual(Reservation.objects.count(), 1)
 
     def test_reserve_next_available_gpu_one_reserved_gpu(self):
-        mommy.make(Reservation, gpu=self.devices[0].gpus.first(), user=self.user)
+        baker.make(Reservation, gpu=self.devices[0].gpus.first(), user=self.user)
 
         response = self.app.get(reverse("reserve"), user=self.user)
         self.assertEqual(response.status_code, 200)
@@ -141,7 +141,7 @@ class TestLabshare(LabshareTestSetup):
 
     def test_reserve_next_available_gpu_two_reserved_gpus(self):
         for gpu in self.devices[0].gpus.all():
-            mommy.make(Reservation, gpu=gpu, user=self.user)
+            baker.make(Reservation, gpu=gpu, user=self.user)
 
         response = self.app.get(reverse("reserve"), user=self.user)
         self.assertEqual(response.status_code, 200)
@@ -172,7 +172,7 @@ class TestLabshare(LabshareTestSetup):
         self.assertEqual(Reservation.objects.count(), 1)
 
     def test_reserve_next_available_spot_one_gpu_reservation(self):
-        mommy.make(Reservation, gpu=self.devices[1].gpus.first(), user=self.user)
+        baker.make(Reservation, gpu=self.devices[1].gpus.first(), user=self.user)
 
         response = self.app.get(reverse("reserve"), user=self.user)
         self.assertEqual(response.status_code, 200)
@@ -295,7 +295,7 @@ class TestLabshare(LabshareTestSetup):
 
     def test_get_gpu_info_with_reservation(self):
         gpu = self.devices[0].gpus.first()
-        mommy.make(Reservation, gpu=gpu, user=self.user)
+        baker.make(Reservation, gpu=gpu, user=self.user)
         response = self.app.get(
             "{url}?uuid={uuid}".format(url=reverse("gpu_info"), uuid=gpu.uuid),
             expect_errors=True,
@@ -323,16 +323,16 @@ class TestLabshare(LabshareTestSetup):
 
     def test_gpu_done_reservation_wrong_user(self):
         gpu = self.devices[0].gpus.first()
-        user = mommy.make(User)
+        user = baker.make(User)
         user.groups.add(self.group)
-        mommy.make(Reservation, gpu=gpu, user=user)
+        baker.make(Reservation, gpu=gpu, user=user)
 
         response = self.app.post(reverse("done_with_gpu", args=[gpu.id]), user=self.user, expect_errors=True)
         self.assertEqual(response.status_code, 403)
 
     def test_gpu_done_only_one_reservation(self):
         gpu = self.devices[0].gpus.first()
-        mommy.make(Reservation, gpu=gpu, user=self.user)
+        baker.make(Reservation, gpu=gpu, user=self.user)
 
         response = self.app.post(reverse("done_with_gpu", args=[gpu.id]), user=self.user)
         self.assertEqual(response.status_code, 200)
@@ -341,11 +341,11 @@ class TestLabshare(LabshareTestSetup):
     def test_gpu_done_one_more_reservation(self):
         gpu = self.devices[0].gpus.first()
 
-        mommy.make(Reservation, gpu=gpu, user=self.user, user_reserved_next_available_spot=False)
+        baker.make(Reservation, gpu=gpu, user=self.user, user_reserved_next_available_spot=False)
 
-        waiting_user = mommy.make(User, email="waiting_user@example.com")
+        waiting_user = baker.make(User, email="waiting_user@example.com")
         waiting_user.groups.add(self.group)
-        mommy.make(Reservation, gpu=gpu, user=waiting_user)
+        baker.make(Reservation, gpu=gpu, user=waiting_user)
 
         response = self.app.post(reverse("done_with_gpu", args=[gpu.id]), user=self.user)
         self.assertEqual(response.status_code, 200)
@@ -356,13 +356,13 @@ class TestLabshare(LabshareTestSetup):
         self.assertIn(waiting_user.email, mail.outbox[0].to)
 
     def test_gpu_done_next_available_spot_reserved(self):
-        user = mommy.make(User)
+        user = baker.make(User)
         user.groups.add(self.group)
         gpus = self.devices[0].gpus
-        mommy.make(Reservation, gpu=gpus.first(), user=self.user)
-        mommy.make(Reservation, gpu=gpus.last(), user=self.user)
-        mommy.make(Reservation, gpu=gpus.first(), user=user, user_reserved_next_available_spot=True)
-        mommy.make(Reservation, gpu=gpus.last(), user=user, user_reserved_next_available_spot=True)
+        baker.make(Reservation, gpu=gpus.first(), user=self.user)
+        baker.make(Reservation, gpu=gpus.last(), user=self.user)
+        baker.make(Reservation, gpu=gpus.first(), user=user, user_reserved_next_available_spot=True)
+        baker.make(Reservation, gpu=gpus.last(), user=user, user_reserved_next_available_spot=True)
         self.assertEqual(Reservation.objects.count(), 4)
 
         response = self.app.post(reverse("done_with_gpu", args=[gpus.first().id]), user=self.user)
@@ -374,14 +374,14 @@ class TestLabshare(LabshareTestSetup):
         self.assertEqual(gpus.last().reservations.first().user, self.user)
 
     def test_gpu_done_next_available_spot_reserved_additional_reservation(self):
-        user = mommy.make(User)
+        user = baker.make(User)
         user.groups.add(self.group)
         gpus = self.devices[0].gpus
-        mommy.make(Reservation, gpu=gpus.last(), user=self.user)
-        mommy.make(Reservation, gpu=gpus.first(), user=self.user)
-        mommy.make(Reservation, gpu=gpus.first(), user=user, user_reserved_next_available_spot=True)
-        mommy.make(Reservation, gpu=gpus.last(), user=user, user_reserved_next_available_spot=True)
-        mommy.make(Reservation, gpu=gpus.last(), user=self.user)
+        baker.make(Reservation, gpu=gpus.last(), user=self.user)
+        baker.make(Reservation, gpu=gpus.first(), user=self.user)
+        baker.make(Reservation, gpu=gpus.first(), user=user, user_reserved_next_available_spot=True)
+        baker.make(Reservation, gpu=gpus.last(), user=user, user_reserved_next_available_spot=True)
+        baker.make(Reservation, gpu=gpus.last(), user=self.user)
         self.assertEqual(Reservation.objects.count(), 5)
 
         response = self.app.post(reverse("done_with_gpu", args=[gpus.first().id]), user=self.user)
@@ -408,11 +408,11 @@ class TestLabshare(LabshareTestSetup):
 
     def test_cancel_gpu_multiple_reservation(self):
         gpu = self.devices[0].gpus.first()
-        other = mommy.make(User)
+        other = baker.make(User)
         other.groups.add(self.group)
-        mommy.make(Reservation, gpu=gpu, user=self.user)
-        mommy.make(Reservation, gpu=gpu, user=other)
-        mommy.make(Reservation, gpu=gpu, user=self.user)
+        baker.make(Reservation, gpu=gpu, user=self.user)
+        baker.make(Reservation, gpu=gpu, user=other)
+        baker.make(Reservation, gpu=gpu, user=self.user)
 
         self.assertEqual(gpu.last_reservation().user, self.user)
         self.app.post(reverse("cancel_gpu", args=[gpu.id]), user=self.user)
@@ -427,21 +427,21 @@ class TestLabshare(LabshareTestSetup):
 
     def test_cancel_gpu_reservation_wrong_user(self):
         gpu = self.devices[0].gpus.first()
-        users = mommy.make(User, _quantity=2)
+        users = baker.make(User, _quantity=2)
         for user in users:
             user.groups.add(self.group)
-        mommy.make(Reservation, gpu=gpu, user=users[0])
-        mommy.make(Reservation, gpu=gpu, user=users[1])
+        baker.make(Reservation, gpu=gpu, user=users[0])
+        baker.make(Reservation, gpu=gpu, user=users[1])
 
         response = self.app.post(reverse("cancel_gpu", args=[gpu.id]), user=self.user, expect_errors=True)
         self.assertEqual(response.status_code, 404)
 
     def test_cancel_gpu(self):
         gpu = self.devices[0].gpus.first()
-        other = mommy.make(User)
+        other = baker.make(User)
         other.groups.add(self.group)
-        mommy.make(Reservation, gpu=gpu, user=other)
-        mommy.make(Reservation, gpu=gpu, user=self.user)
+        baker.make(Reservation, gpu=gpu, user=other)
+        baker.make(Reservation, gpu=gpu, user=self.user)
 
         self.app.post(reverse("cancel_gpu", args=[gpu.id]), user=self.user)
         self.assertEqual(Reservation.objects.count(), 1)
@@ -480,15 +480,15 @@ class TestLabshare(LabshareTestSetup):
         self.assertRaises(template.TemplateSyntaxError, icon, parser, token)
 
     def test_device_str_representation(self):
-        device = mommy.prepare(Device)
+        device = baker.prepare(Device)
         self.assertEqual(str(device), device.name)
 
     def test_gpu_str_representation(self):
-        gpu = mommy.prepare(GPU, device=self.devices[0])
+        gpu = baker.prepare(GPU, device=self.devices[0])
         self.assertEqual(str(gpu), gpu.model_name)
 
     def test_reservation_str_representation(self):
-        reservation = mommy.prepare(Reservation, gpu=self.gpu, user=self.user)
+        reservation = baker.prepare(Reservation, gpu=self.gpu, user=self.user)
         self.assertEqual(str(reservation), "{gpu} on {device}, {user}".format(
             gpu=reservation.gpu,
             device=reservation.gpu.device,
@@ -500,7 +500,7 @@ class TestReservationExpiration(LabshareTestSetup):
     @classmethod
     def setUpTestData(cls):
         super().setUpTestData()
-        cls.other_user = mommy.make(User, email="otheruser@example.com")
+        cls.other_user = baker.make(User, email="otheruser@example.com")
         cls.other_user.groups.add(cls.group)
 
     def assertTimeAlmostEqual(self, a, b):
@@ -522,7 +522,7 @@ class TestReservationExpiration(LabshareTestSetup):
         self.assertEqual(Reservation.objects.count(), previous_num_reservations + 1)
 
     def test_new_reservation(self):
-        reservation = mommy.make(Reservation, gpu=self.gpu, user=self.user)
+        reservation = baker.make(Reservation, gpu=self.gpu, user=self.user)
         self.assertIsNone(reservation.usage_started)
         self.assertIsNone(reservation.usage_expires)
         self.assertFalse(reservation.is_usage_expired())
@@ -641,13 +641,13 @@ class TestMessages(WebTest):
     csrf_checks = False
 
     def setUp(self):
-        self.user = mommy.make(User, is_superuser=True, is_staff=True, email="test@example.com")
+        self.user = baker.make(User, is_superuser=True, is_staff=True, email="test@example.com")
         self.devices = device_recipe.make(_quantity=3)
-        mommy.make(GPU, device=self.devices[0], _quantity=2, used_memory="12 Mib", total_memory="112 Mib")
-        mommy.make(GPU, device=self.devices[1], used_memory="12 Mib", total_memory="112 Mib")
-        mommy.make(GPU, device=self.devices[-1], used_memory="12 Mib", total_memory="112 Mib")
+        baker.make(GPU, device=self.devices[0], _quantity=2, used_memory="12 Mib", total_memory="112 Mib")
+        baker.make(GPU, device=self.devices[1], used_memory="12 Mib", total_memory="112 Mib")
+        baker.make(GPU, device=self.devices[-1], used_memory="12 Mib", total_memory="112 Mib")
 
-        self.group = mommy.make(Group)
+        self.group = baker.make(Group)
         for device in self.devices:
             assign_perm('use_device', self.group, device)
         self.user.groups.add(self.group)
@@ -657,7 +657,7 @@ class TestMessages(WebTest):
         self.assertEqual(response.status_code, 302)
 
     def test_view_message_site_normal_user(self):
-        user = mommy.make(User)
+        user = baker.make(User)
         user.groups.add(self.group)
         response = self.app.get(reverse("send_message"), user=user)
         self.assertEqual(response.status_code, 200)
@@ -716,7 +716,7 @@ class TestMessages(WebTest):
     def test_send_message_to_multiple_users(self):
         response = self.app.get(reverse("send_message"), user=self.user)
         self.assertEqual(response.status_code, 200)
-        _ = mommy.make(User)
+        _ = baker.make(User)
 
         form = response.form
         form['recipients'] = ['1', '2']
@@ -744,7 +744,7 @@ class TestMessages(WebTest):
         self.assertEqual(len(sent_mail.bcc), 0)
 
     def test_send_message_to_all_not_permitted(self):
-        user = mommy.make(User)
+        user = baker.make(User)
         user.groups.add(self.group)
         response = self.app.get(reverse("send_message"), user=user)
         self.assertEqual(response.status_code, 200)
@@ -776,7 +776,7 @@ class TestMessages(WebTest):
         self.assertEqual(len(mail.outbox), 0)
 
     def test_send_message_multiple_email_addresses(self):
-        addresses = [address.email for address in mommy.make(EmailAddress, _quantity=3, user=self.user)]
+        addresses = [address.email for address in baker.make(EmailAddress, _quantity=3, user=self.user)]
         addresses.append(self.user.email)
         response = self.app.get(reverse("send_message"), user=self.user)
         self.assertEqual(response.status_code, 200)
@@ -804,16 +804,16 @@ class GPUProcessTests(WebTest):
     csrf_checks = False
 
     def setUp(self):
-        self.user = mommy.make(User, is_superuser=True)
+        self.user = baker.make(User, is_superuser=True)
 
         devices = device_recipe.make(_quantity=3)
         for idx, device in enumerate(devices):
-            gpus = mommy.make(GPU, _quantity=2, device=device)
+            gpus = baker.make(GPU, _quantity=2, device=device)
             for gpu in gpus:
                 if idx == 1:
-                    mommy.make(GPUProcess, gpu=gpu, _quantity=2)
+                    baker.make(GPUProcess, gpu=gpu, _quantity=2)
                 elif idx == 2:
-                    mommy.make(GPUProcess, gpu=gpu)
+                    baker.make(GPUProcess, gpu=gpu)
 
     def test_gpu_process_string(self):
         for process in GPUProcess.objects.all():
@@ -830,20 +830,20 @@ class LabSharePermissionTests(WebTest):
     csrf_checks = False
 
     def setUp(self):
-        self.staff_user = mommy.make(User)
-        self.user = mommy.make(User)
+        self.staff_user = baker.make(User)
+        self.user = baker.make(User)
         self.devices = device_recipe.make(_quantity=3)
-        mommy.make(GPU, device=self.devices[0], _quantity=2, used_memory="12 Mib", total_memory="112 Mib")
-        mommy.make(GPU, device=self.devices[1], used_memory="12 Mib", total_memory="112 Mib")
-        mommy.make(GPU, device=self.devices[-1], used_memory="12 Mib", total_memory="112 Mib")
+        baker.make(GPU, device=self.devices[0], _quantity=2, used_memory="12 Mib", total_memory="112 Mib")
+        baker.make(GPU, device=self.devices[1], used_memory="12 Mib", total_memory="112 Mib")
+        baker.make(GPU, device=self.devices[-1], used_memory="12 Mib", total_memory="112 Mib")
 
-        self.student_group = mommy.make(Group, name="students")
+        self.student_group = baker.make(Group, name="students")
         self.user.groups.add(self.student_group)
 
         for device in self.devices[:-1]:
             assign_perm('use_device', self.student_group, device)
 
-        self.staff_group = mommy.make(Group, name="staff")
+        self.staff_group = baker.make(Group, name="staff")
         self.staff_user.groups.add(self.staff_group)
 
         for device in self.devices:
@@ -966,11 +966,11 @@ class LabSharePermissionTests(WebTest):
             self.assertEqual(response.status_code, 404)
 
     def test_gpu_done(self):
-        mommy.make(Reservation, gpu=self.devices[0].gpus.first(), user=self.user)
+        baker.make(Reservation, gpu=self.devices[0].gpus.first(), user=self.user)
         response = self.app.post(reverse("done_with_gpu", args=[self.devices[0].gpus.first().id]), user=self.user)
         self.assertEqual(response.status_code, 200)
 
-        mommy.make(Reservation, gpu=self.devices[-1].gpus.first(), user=self.staff_user)
+        baker.make(Reservation, gpu=self.devices[-1].gpus.first(), user=self.staff_user)
         response = self.app.post(
             reverse("done_with_gpu", args=[self.devices[-1].gpus.first().id]),
             user=self.user,
@@ -991,11 +991,11 @@ class LabSharePermissionTests(WebTest):
         self.assertEqual(response.status_code, 400)
 
     def test_gpu_cancel(self):
-        current_user = mommy.make(User)
+        current_user = baker.make(User)
         current_user.groups.add(self.student_group)
 
-        mommy.make(Reservation, gpu=self.devices[0].gpus.first(), user=current_user)
-        mommy.make(Reservation, gpu=self.devices[0].gpus.first(), user=self.user)
+        baker.make(Reservation, gpu=self.devices[0].gpus.first(), user=current_user)
+        baker.make(Reservation, gpu=self.devices[0].gpus.first(), user=self.user)
 
         # the user who holds the current reservation is not allowed to cancel (only mark as done)
         response = self.app.post(reverse("cancel_gpu", args=[self.devices[0].gpus.first().id]), user=current_user,
@@ -1006,8 +1006,8 @@ class LabSharePermissionTests(WebTest):
         response = self.app.post(reverse("cancel_gpu", args=[self.devices[0].gpus.first().id]), user=self.user)
         self.assertEqual(response.status_code, 200)
 
-        mommy.make(Reservation, gpu=self.devices[-1].gpus.first(), user=current_user)
-        mommy.make(Reservation, gpu=self.devices[-1].gpus.first(), user=self.staff_user)
+        baker.make(Reservation, gpu=self.devices[-1].gpus.first(), user=current_user)
+        baker.make(Reservation, gpu=self.devices[-1].gpus.first(), user=self.staff_user)
         response = self.app.post(reverse("cancel_gpu", args=[self.devices[-1].gpus.first().id]), user=self.user,
                                  expect_errors=True)
         self.assertEqual(response.status_code, 403)
@@ -1027,8 +1027,8 @@ class LabSharePermissionTests(WebTest):
 class EmailAddressTests(WebTest):
 
     def setUp(self):
-        user = mommy.make(User)
-        mommy.make(EmailAddress, _quantity=5, user=user)
+        user = baker.make(User)
+        baker.make(EmailAddress, _quantity=5, user=user)
 
     def test_stringify_email_address(self):
         for address in EmailAddress.objects.all():
@@ -1112,16 +1112,15 @@ class UpdateGPUTests(APITestCase):
     def setUp(self):
         self.device = device_recipe.make()
         self.url = reverse("update_gpu_info")
-        # device = mommy.make(Device)
         user = self.device.user
         self.client.force_authenticate(user=user)
 
     # TODO: add functionality for broken GPUs --> send nothing and trigger something on labshare server after 30 min
     @mock.patch("urllib.request.urlopen", fail_url)
     def test_update_gpu_info_no_gpu_works(self):
-        mommy.make(Device)
+        baker.make(Device)
         for device in Device.objects.all():
-            mommy.make(GPU, device=device, _quantity=2)
+            baker.make(GPU, device=device, _quantity=2)
         pre_call_last_update = [gpu.last_updated for gpu in GPU.objects.all()]
         update_gpu_info()
         post_call_last_update = [gpu.last_updated for gpu in GPU.objects.all()]
@@ -1168,7 +1167,7 @@ class UpdateGPUTests(APITestCase):
         self.assertTrue(gpu.in_use)
 
     def test_update_gpu_info_old_gpu_switch_to_in_use(self):
-        mommy.make(GPU, device=self.device, uuid="lorem", in_use=False)
+        baker.make(GPU, device=self.device, uuid="lorem", in_use=False)
         self.assertEqual(GPU.objects.count(), 1)
         self.assertEqual(GPUProcess.objects.count(), 0)
         response = self.client.post(self.url,
@@ -1181,7 +1180,7 @@ class UpdateGPUTests(APITestCase):
         self.assertEqual(GPUProcess.objects.count(), 1)
 
     def test_update_gpu_info_old_gpu_add_new_in_use_gpu(self):
-        mommy.make(GPU, device=self.device, uuid="test", in_use=False)
+        baker.make(GPU, device=self.device, uuid="test", in_use=False)
         self.assertEqual(GPU.objects.count(), 1)
         self.assertEqual(GPUProcess.objects.count(), 0)
         response = self.client.post(self.url,
@@ -1194,8 +1193,8 @@ class UpdateGPUTests(APITestCase):
         self.assertEqual(GPUProcess.objects.count(), 1)
 
     def test_update_gpu_info_old_gpu_add_new_processes(self):
-        gpu = mommy.make(GPU, device=self.device, uuid="lorem", in_use=False)
-        process = mommy.make(GPUProcess, gpu=gpu)
+        gpu = baker.make(GPU, device=self.device, uuid="lorem", in_use=False)
+        process = baker.make(GPUProcess, gpu=gpu)
         self.assertEqual(GPU.objects.count(), 1)
         self.assertEqual(GPUProcess.objects.count(), 1)
         response = self.client.post(self.url,
@@ -1218,9 +1217,9 @@ class FailedGPUTests(TestCase):
     def setUp(self):
         with mock.patch("django.utils.timezone.now") as mock_now:
             mock_now.return_value = utc_now() - datetime.timedelta(hours=2)
-            self.gpu_1 = mommy.make(GPU)
-        self.gpu_2 = mommy.make(GPU)
-        self.user = mommy.make(User)
+            self.gpu_1 = baker.make(GPU)
+        self.gpu_2 = baker.make(GPU)
+        self.user = baker.make(User)
 
     def test_failed_gpus_fresh_fail(self):
         pre_last_update = self.gpu_1.last_updated
@@ -1232,8 +1231,8 @@ class FailedGPUTests(TestCase):
         self.assertEqual(gpu.last_updated, pre_last_update)
 
     def test_failed_gpus_with_user_with_single_email(self):
-        mommy.make(Reservation, user=self.user, gpu=self.gpu_1)
-        mommy.make(Reservation, user=self.user, gpu=self.gpu_2)
+        baker.make(Reservation, user=self.user, gpu=self.gpu_1)
+        baker.make(Reservation, user=self.user, gpu=self.gpu_2)
 
         pre_last_update = self.gpu_1.last_updated
         determine_failed_gpus()
@@ -1246,9 +1245,9 @@ class FailedGPUTests(TestCase):
         self.assertEqual(gpu.last_updated, pre_last_update)
 
     def test_failed_gpus_with_multiple_email_addresses(self):
-        mommy.make(Reservation, user=self.user, gpu=self.gpu_1)
-        mommy.make(Reservation, user=self.user, gpu=self.gpu_2)
-        mommy.make(EmailAddress, user=self.user, _quantity=2)
+        baker.make(Reservation, user=self.user, gpu=self.gpu_1)
+        baker.make(Reservation, user=self.user, gpu=self.gpu_2)
+        baker.make(EmailAddress, user=self.user, _quantity=2)
         all_email_addresses = [address.email for address in EmailAddress.objects.filter(user=self.user)]
         all_email_addresses.append(self.user.email)
 
@@ -1273,7 +1272,7 @@ class FailedGPUTests(TestCase):
         self.assertEqual(len(mail.outbox), 0)
 
     def test_multiple_failed_gpus(self):
-        mommy.make(Reservation, user=self.user, gpu=self.gpu_1)
+        baker.make(Reservation, user=self.user, gpu=self.gpu_1)
         with mock.patch("django.utils.timezone.now") as mock_now:
             mock_now.return_value = utc_now() - datetime.timedelta(hours=2)
             self.gpu_2.model_name = "new name to force date change"
@@ -1312,8 +1311,8 @@ class HijackTests(WebTest):
 
     @classmethod
     def setUpTestData(cls):
-        cls.super_user = mommy.make(User, is_superuser=True, is_staff=True)
-        cls.user = mommy.make(User)
+        cls.super_user = baker.make(User, is_superuser=True, is_staff=True)
+        cls.user = baker.make(User)
 
     def test_superuser_can_see_link(self):
         response = self.app.get(reverse("index"), user=self.super_user)
@@ -1364,11 +1363,11 @@ class PublishMethodTests(TestCase):
     def setUp(self):
         self.device = device_recipe.make()
         self.device_2 = device_recipe.make()
-        self.user = mommy.make(User)
+        self.user = baker.make(User)
         assign_perm('labshare.use_device', self.user, self.device)
 
-        mommy.make(GPU, device=self.device, _quantity=2)
-        mommy.make(GPU, device=self.device_2, _quantity=2)
+        baker.make(GPU, device=self.device, _quantity=2)
+        baker.make(GPU, device=self.device_2, _quantity=2)
 
     @mock.patch('labshare.utils.async_to_sync', async_to_sync_mock)
     def test_publish_gpu_states(self):
@@ -1408,11 +1407,11 @@ class ConsumerTests(TestCase):
     def setUp(self):
         self.device = device_recipe.make()
         self.device_2 = device_recipe.make()
-        self.user = mommy.make(User)
+        self.user = baker.make(User)
         assign_perm('labshare.use_device', self.user, self.device)
 
-        mommy.make(GPU, device=self.device, _quantity=2)
-        mommy.make(GPU, device=self.device_2, _quantity=2)
+        baker.make(GPU, device=self.device, _quantity=2)
+        baker.make(GPU, device=self.device_2, _quantity=2)
 
         self.scope = {
             "user": self.user,
@@ -1469,7 +1468,7 @@ class LDAPTests(WebTest):
     @classmethod
     def setUpTestData(cls):
         cls.staff_group = Group.objects.get(name=ldap_staff_name)
-        cls.student_group = mommy.make(Group, name=ldap_student_name)
+        cls.student_group = baker.make(Group, name=ldap_student_name)
 
         cls.device = device_recipe.make()
         assign_perm('labshare.use_device', cls.staff_group, cls.device)
@@ -1630,28 +1629,28 @@ class FrontendTestsBase(ChannelsLiveServerTestCase):
 
         cls.password = 'test'
 
-        cls.staff_user = mommy.make(User, is_superuser=True)
+        cls.staff_user = baker.make(User, is_superuser=True)
         cls.staff_user.set_password(cls.password)
         cls.staff_user.save()
 
-        cls.user = mommy.make(User)
+        cls.user = baker.make(User)
         cls.user.set_password(cls.password)
         cls.user.save()
 
         cls.device_1 = device_recipe.make()
-        gpus = mommy.make(GPU, device=cls.device_1, _quantity=4)
-        mommy.make(GPUProcess, gpu=gpus[0])
-        mommy.make(GPUProcess, gpu=gpus[1])
-        mommy.make(Reservation, user=cls.staff_user, gpu=gpus[0])
-        mommy.make(Reservation, user=cls.user, gpu=gpus[1])
-        mommy.make(Reservation, user=cls.staff_user, gpu=gpus[1])
+        gpus = baker.make(GPU, device=cls.device_1, _quantity=4)
+        baker.make(GPUProcess, gpu=gpus[0])
+        baker.make(GPUProcess, gpu=gpus[1])
+        baker.make(Reservation, user=cls.staff_user, gpu=gpus[0])
+        baker.make(Reservation, user=cls.user, gpu=gpus[1])
+        baker.make(Reservation, user=cls.staff_user, gpu=gpus[1])
         assign_perm('labshare.use_device', cls.user, cls.device_1)
         make_reservation_in_the_past(cls.staff_user, gpus[3], Reservation.usage_period() - timedelta(days=1))
 
         cls.device_2 = device_recipe.make()
-        gpus = mommy.make(GPU, device=cls.device_2, _quantity=2)
-        mommy.make(GPUProcess, gpu=gpus[0], _quantity=2)
-        mommy.make(Reservation, user=cls.staff_user, gpu=gpus[0])
+        gpus = baker.make(GPU, device=cls.device_2, _quantity=2)
+        baker.make(GPUProcess, gpu=gpus[0], _quantity=2)
+        baker.make(Reservation, user=cls.staff_user, gpu=gpus[0])
 
     def setUp(self):
         self.login_user(self.staff_user.username)
