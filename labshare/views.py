@@ -1,24 +1,23 @@
 import json
-import sys
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.core.exceptions import ObjectDoesNotExist, PermissionDenied, SuspiciousOperation
 from django.core.mail import EmailMessage
-from django.http import HttpResponseRedirect, HttpResponseBadRequest, HttpResponse, HttpResponseForbidden, Http404
+from django.http import HttpResponseRedirect, HttpResponse, Http404
 from django.shortcuts import get_object_or_404
 from django.urls import reverse
-from django.views.decorators.csrf import ensure_csrf_cookie, csrf_exempt
-from rest_framework.authentication import SessionAuthentication, BasicAuthentication, TokenAuthentication
+from django.views.decorators.csrf import ensure_csrf_cookie
+from rest_framework.authentication import TokenAuthentication
 from rest_framework.decorators import api_view, authentication_classes, permission_classes
 from rest_framework.permissions import IsAuthenticated
 
-from .forms import DeviceSelectForm, MessageForm, ViewAsForm
+from labshare.decorators import render_to
 from labshare.utils import send_reservation_mail_for, send_gpu_done_mail, login_required_ajax, publish_device_state, \
     delete_reservation
+from .forms import DeviceSelectForm, MessageForm, ViewAsForm
 from .models import Device, Reservation, GPU, GPUProcess
-from labshare.decorators import render_to
 
 
 @ensure_csrf_cookie
@@ -218,6 +217,7 @@ def update_gpu_info(request):
                 uuid=gpu_data["uuid"],
                 used_memory=gpu_data["memory"]["used"],
                 total_memory=gpu_data["memory"]["total"],
+                utilization=gpu_data["gpu_util"],
                 in_use=gpu_in_use,
             )
         else:
@@ -240,6 +240,8 @@ def update_gpu_info(request):
                     memory_usage=process.get("used_memory", "Unknown"),
                     username=process.get("username", "Unknown"),
                 ).save()
+
+        publish_device_state(device)
 
     return HttpResponse()
 

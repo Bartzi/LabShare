@@ -54,6 +54,7 @@ class GPU(models.Model):
     model_name = models.CharField(max_length=255)
     used_memory = models.CharField(max_length=100)
     total_memory = models.CharField(max_length=100)
+    utilization = models.CharField(max_length=100)
     in_use = models.BooleanField(default=False)
     marked_as_failed = models.BooleanField(default=False)
 
@@ -103,6 +104,7 @@ class GPU(models.Model):
             'name': self.model_name,
             'uuid': self.uuid,
             'memory': self.memory_usage(),
+            'utilization': self.utilization,
             'processes': [process.serialize() for process in self.processes.all()],
             'last_update': self.last_updated.astimezone(pytz.timezone(settings.TIME_ZONE)).isoformat(),
             'failed': self.marked_as_failed,

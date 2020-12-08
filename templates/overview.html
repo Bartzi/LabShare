@@ -79,8 +79,6 @@
 
 {% block scripts %}
     {{ block.super }}
-    <!-- DataTables JavaScript -->
-    <script src="{% static 'node_modules/datatables.net/js/jquery.dataTables.min.js' %}"></script>
     <script src="{% static 'node_modules/datatables.net-bs4/js/dataTables.bootstrap4.min.js' %}"></script>
     <script src="{% static 'node_modules/reconnectingwebsocket/reconnecting-websocket.min.js' %}"></script>
     <script src="{% static 'node_modules/pluralize/pluralize.js' %}"></script>
@@ -95,15 +93,6 @@
 
         $(document).ready(function() {
             setUpWebsockets(deviceNames, currentUser);
-
-            $('#overview-table').DataTable({
-                responsive: true,
-                paging: false,
-                dom: 'ti',
-                "columnDefs": [
-                    {"orderable": false, "targets": [2, 3, 4, 5, 6, 7]}
-                ]
-            });
         });
     </script>
 {% endblock %}

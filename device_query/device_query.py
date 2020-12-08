@@ -1,12 +1,11 @@
 import configparser
 import json
 import pwd
-import socket
 import sys
+import xml.etree.ElementTree as ET
 from time import sleep
 
 import requests
-import xml.etree.ElementTree as ET
 
 
 def parse_nvidia_xml(xml):
@@ -25,6 +24,10 @@ def parse_nvidia_xml(xml):
             "used": memory_usage.find("used").text,
             "free": memory_usage.find("free").text,
         }
+
+        gpu_util_str = gpu.find("utilization").find("gpu_util").text
+        gpu_util = gpu_util_str[:-2]  # strips trailing " %"
+        current_gpu_data["gpu_util"] = gpu_util
 
         process_block = gpu.find("processes")
         if process_block.text == "N/A":
@@ -56,9 +59,85 @@ def get_owner_for_pid(pid):
             return pwd.getpwuid(uid).pw_name
 
 
+# TODO: remove
+def get_test_data(device_num):
+    if device_num == 1:
+        gpu_data = [
+            {
+                'name': 'Testy GPU',
+                'uuid': 'loremuuuuuu',
+                'memory': {
+                    'total': '200 MB',
+                    'used': '20 MB',
+                    'free': '180 MB'
+                },
+                'gpu_util': '39',
+                'in_use': 'yes',
+                'processes': [{
+                    'pid': 1,
+                    'username': 'Mrs. Keksi',
+                    'name': 'TestProcess',
+                    'used_memory': '10 MB'
+                }]
+            },
+            {
+                'name': 'Testy GPU 2',
+                'uuid': 'loremuuuu',
+                'memory': {
+                    'total': '100 MB',
+                    'used': '0 MB',
+                    'free': '100 MB'
+                },
+                'gpu_util': '0',
+                'in_use': 'no',
+                'processes': []
+            }
+        ]
+        device_name = "test_device"
+    elif device_num == 2:
+        gpu_data = [
+            {
+                'name': 'Test GPU',
+                'uuid': 'lorem',
+                'memory': {
+                    'total': '100 MB',
+                    'used': '0 MB',
+                    'free': '100 MB'
+                },
+                'gpu_util': '86',
+                'in_use': 'no',
+                'processes': []
+            },
+        ]
+        device_name = "test_device2"
+    else:
+        gpu_data = [{
+            'name': 'Toast GPU',
+            'uuid': 'loremuuuuuu',
+            'memory': {
+                'total': '200 MB',
+                'used': '20 MB',
+                'free': '180 MB'
+            },
+            'gpu_util': '14',
+            'in_use': 'yes',
+            'processes': [{
+                'pid': 1,
+                'username': 'Mrs. Keksi',
+                'name': 'TestProcess',
+                'used_memory': '10 MB'
+            }]
+        }]
+        device_name = "test_device3"
+    return device_name, gpu_data
+
+
 def main():
     # TODO: check if this still works with the provided service conf
     # TODO: parse GPU utilization
+    # TODO remove test server
+    # TODO change requirements (e.g. mommy -> bakery)
+    # TODO: fix migration that has no default
     config = configparser.ConfigParser()
     config.read("config.ini")
 
@@ -79,55 +158,7 @@ def main():
     gpu_data = parse_nvidia_xml(raw_gpu_data)
 
     #### for testing
-    # gpu_data = [{
-    #     'name': 'Testy GPU',
-    #     'uuid': 'loremuuuuuu',
-    #     'memory': {
-    #         'total': '200 MB',
-    #         'used': '20 MB',
-    #         'free': '180 MB'
-    #     },
-    #     'in_use': 'yes',
-    #     'processes': [{
-    #         'pid': 1,
-    #         'username': 'Mrs. Keksi',
-    #         'name': 'TestProcess',
-    #         'used_memory': '10 MB'
-    #     }]
-    # }]
-    # device_name = "test_device"
-    #
-    # gpu_data = [{
-    #     'name': 'Test GPU',
-    #     'uuid': 'lorem',
-    #     'memory': {
-    #         'total': '100 MB',
-    #         'used': '0 MB',
-    #         'free': '100 MB'
-    #     },
-    #     'in_use': 'no',
-    #     'processes': []
-    # }]
-    # device_name = "test_device2"
-    #
-    # gpu_data = [{
-    #     'name': 'Toast GPU',
-    #     'uuid': 'loremuuuuuu',
-    #     'memory': {
-    #         'total': '200 MB',
-    #         'used': '20 MB',
-    #         'free': '180 MB'
-    #     },
-    #     'in_use': 'yes',
-    #     'processes': [{
-    #         'pid': 1,
-    #         'username': 'Mrs. Keksi',
-    #         'name': 'TestProcess',
-    #         'used_memory': '10 MB'
-    #     }]
-    # }]
-    # device_name = "test_device"
-    #### testing end
+    device_name, gpu_data = get_test_data(1)
 
     post_data = {
         "gpu_data": gpu_data,
@@ -135,7 +166,9 @@ def main():
     }
     encoded_post_data = bytes(json.dumps(post_data, indent=4), 'utf-8')
     while True:
+        print("Sending request...")  # TODO: add timestamps?
         r = requests.post(server_url, headers=headers, data=encoded_post_data)
+        print(f"Request returned {r.status_code}")
         sleep(update_interval)
         break  # TODO remove
 

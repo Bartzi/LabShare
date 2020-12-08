@@ -6,7 +6,6 @@ django-bootstrap4 == 0.0.8
 django-guardian == 2.0.0
 django-hijack == 2.1.10
 django-webtest == 1.9.7
-model_mommy == 1.6.0
 coveralls==1.8.2
 selenium == 3.141.0
 pyaml==19.4.1

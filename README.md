@@ -5,8 +5,9 @@ Django Tool that helps everyone to get their fair share of GPU time.
 ## Installation
 
 1. clone repository
-2. install requirements with `pip install -r requirements.txt` (make sure to use python 3 (>=3.6)!)
-3. start a redis server instance (you can use a docker container and start it ith the following command: `docker run -p 6379:6379 -d redis`)
+2. make sure that `OpenLDAP` is installed  (under Ubuntu it can be installed using this command: `apt-get install libldap2-dev`)
+2. install requirements with `pip install -r requirements.txt` (make sure to use python 3 (>=3.6)!) 
+3. start a redis server instance (you can use a docker container and start it with the following command: `docker run -p 6379:6379 -d redis`)
 3. create database by running `python manage.py migrate`
 4. Install [Yarn](https://yarnpkg.com/en/docs/install)
 4. go into folder `static` and run `yarn` or `yarn install` to install all front end libraries.
@@ -29,3 +30,5 @@ You can do this in one of the following ways:
 
 1. Add the `use_device` permission to a group of your choice (for instance the default Staff group) and add users to the this group. this global permission allows each user in that group to use all GPUs in LabShare. This allows you to easily provide the necessary permission to each user.
 2. For finegrained control you can control who can use which device, by adding the `use_device` permission to each user or a group in the permission admin of each device.
+
+**TODO:** proper config.ini has to be created

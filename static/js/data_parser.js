@@ -67,27 +67,6 @@ function updateGPUData(data, currentUser) {
 
 }
 
-function setupActionButtons() {
-    $(".action-button").on('click', function (){
-        const $this = $(this);
-        const url = $this.data('action');
-        const tagData = $this.data();
-        const postData = Object.keys(tagData)
-            .filter(key => key !== 'action')
-            .reduce((obj, key) => {
-                obj[key] = tagData[key];
-                return obj;
-            }, {});
-
-        $.post(
-            url,
-            postData
-        ).fail(function () {
-            console.log("Error while performing " + url);
-        });
-    });
-}
-
 function setupModals() {
     $('.gpu-process-show').on('click', function (event) {
         const that = $(this);
@@ -137,6 +116,5 @@ function setupWebsockets(deviceNames, currentUser) {
 
 export default function(deviceNames, currentUser) {
     setupWebsockets(deviceNames, currentUser);
-    setupActionButtons();
     setupModals();
 }
