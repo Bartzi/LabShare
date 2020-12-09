@@ -194,7 +194,6 @@ def gpu_cancel(request, gpu_id):
 @authentication_classes((TokenAuthentication,))
 @permission_classes((IsAuthenticated,))
 def update_gpu_info(request):
-    # TODO: validate with mock data that contain processes
     if request.method != "POST":
         raise SuspiciousOperation
 

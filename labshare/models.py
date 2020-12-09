@@ -14,7 +14,7 @@ from rest_framework.authtoken.models import Token
 
 class Device(models.Model):
     name = models.CharField(max_length=255)
-    user = models.OneToOneField(User, on_delete=models.CASCADE)  # TODO: fallback for already created devices
+    user = models.OneToOneField(User, on_delete=models.CASCADE)
 
     class Meta:
         permissions = (

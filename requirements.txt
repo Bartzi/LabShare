@@ -1,12 +1,13 @@
 channels == 2.2.0
 channels-redis == 2.4.0
+coveralls==1.8.2
 django >= 2.2, < 2.3
 django-auth-ldap == 2.0.0
 django-bootstrap4 == 0.0.8
 django-guardian == 2.0.0
 django-hijack == 2.1.10
-django-webtest == 1.9.7
-coveralls==1.8.2
-selenium == 3.141.0
-pyaml==19.4.1
 djangorestframework==3.12.2
+django-webtest == 1.9.7
+model-bakery == 1.2.1
+pyaml==19.4.1
+selenium == 3.141.0
