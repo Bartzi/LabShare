@@ -3,6 +3,7 @@ import json
 import pwd
 import sys
 import xml.etree.ElementTree as ET
+from datetime import datetime
 from time import sleep
 
 import requests
@@ -25,8 +26,7 @@ def parse_nvidia_xml(xml):
             "free": memory_usage.find("free").text,
         }
 
-        gpu_util_str = gpu.find("utilization").find("gpu_util").text
-        gpu_util = gpu_util_str[:-2]  # strips trailing " %"
+        gpu_util= gpu.find("utilization").find("gpu_util").text
         current_gpu_data["gpu_util"] = gpu_util
 
         process_block = gpu.find("processes")
@@ -71,7 +71,7 @@ def get_test_data(device_num):
                     'used': '20 MB',
                     'free': '180 MB'
                 },
-                'gpu_util': '39',
+                'gpu_util': '39 %',
                 'in_use': 'yes',
                 'processes': [{
                     'pid': 1,
@@ -88,7 +88,7 @@ def get_test_data(device_num):
                     'used': '0 MB',
                     'free': '100 MB'
                 },
-                'gpu_util': '0',
+                'gpu_util': '0 %',
                 'in_use': 'no',
                 'processes': []
             }
@@ -104,7 +104,7 @@ def get_test_data(device_num):
                     'used': '0 MB',
                     'free': '100 MB'
                 },
-                'gpu_util': '86',
+                'gpu_util': '86 %',
                 'in_use': 'no',
                 'processes': []
             },
@@ -134,10 +134,6 @@ def get_test_data(device_num):
 
 def main():
     # TODO: check if this still works with the provided service conf
-    # TODO: parse GPU utilization
-    # TODO remove test server
-    # TODO change requirements (e.g. mommy -> bakery)
-    # TODO: fix migration that has no default
     config = configparser.ConfigParser()
     config.read("config.ini")
 
@@ -158,7 +154,7 @@ def main():
     gpu_data = parse_nvidia_xml(raw_gpu_data)
 
     #### for testing
-    device_name, gpu_data = get_test_data(1)
+    device_name, gpu_data = get_test_data(2)
 
     post_data = {
         "gpu_data": gpu_data,
@@ -166,9 +162,11 @@ def main():
     }
     encoded_post_data = bytes(json.dumps(post_data, indent=4), 'utf-8')
     while True:
-        print("Sending request...")  # TODO: add timestamps?
+        time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        print(f"[{time}] Sending request...")
         r = requests.post(server_url, headers=headers, data=encoded_post_data)
-        print(f"Request returned {r.status_code}")
+        time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        print(f"[{time}] Request returned {r.status_code} {r.reason}")
         sleep(update_interval)
         break  # TODO remove
 

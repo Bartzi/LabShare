@@ -7,6 +7,7 @@ function updateGPUData(data, currentUser) {
     for (let gpu of data.gpus) {
         const gpuRow = $('#' + gpu.uuid);
         gpuRow.find('.gpu-memory').html(gpu.memory);
+        gpuRow.find('.gpu-utilization').html(gpu.utilization);
         gpuRow.find('.gpu-last-update').timeago('init').timeago('update', gpu.last_update);
         gpuRow.find('.gpu-current-reservation').html(gpu.current_user);
         gpuRow.find('.gpu-next-reservation').html(gpu.next_users.length > 0 ? gpu.next_users[0] : '');

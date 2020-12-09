@@ -222,6 +222,7 @@ def update_gpu_info(request):
             )
         else:
             gpu = gpu.get()
+            gpu.utilization = gpu_data["gpu_util"]
             memory_info = gpu_data["memory"]
             gpu.used_memory = memory_info["used"]
             gpu.total_memory = memory_info["total"]
