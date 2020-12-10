@@ -44,7 +44,8 @@ def save_device_user(sender, instance, **kwargs):
 @receiver(post_save, sender=Device)
 def create_device_auth_token(sender, instance=None, created=False, **kwargs):
     if created:
-        Token.objects.create(user=instance.user)
+        token = Token.objects.create(user=instance.user)
+        token.save()
 
 
 class GPU(models.Model):
