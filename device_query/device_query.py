@@ -1,3 +1,4 @@
+import argparse
 import configparser
 import json
 import pwd
@@ -14,7 +15,7 @@ def parse_nvidia_xml(xml):
     gpu_data = []
     root = ET.fromstring(xml)
 
-    for gpu in root.iter('gpu'):
+    for gpu in root.iter("gpu"):
         current_gpu_data = {
             "name": gpu.find("product_name").text,
             "uuid": gpu.find("uuid").text,
@@ -37,9 +38,9 @@ def parse_nvidia_xml(xml):
             current_gpu_data["in_use"] = "no"
             current_gpu_data["processes"] = []
             for process in process_block.iter("process_info"):
-                if process.find('type').text.lower() == "c":
+                if process.find("type").text.lower() == "c":
                     current_gpu_data["in_use"] = "yes"
-                    pid = process.find('pid').text
+                    pid = process.find("pid").text
                     process_info = {
                         "pid": pid,
                         "username": get_owner_for_pid(pid),
@@ -54,13 +55,13 @@ def parse_nvidia_xml(xml):
 
 def get_owner_for_pid(pid):
     UID = 1
-    for line in open('/proc/{}/status'.format(pid)):
-        if line.startswith('Uid:'):
+    for line in open("/proc/{}/status".format(pid)):
+        if line.startswith("Uid:"):
             uid = int(line.split()[UID])
             return pwd.getpwuid(uid).pw_name
 
 
-def main():
+def main(verify):
     config = configparser.ConfigParser()
     config.read("config.ini")
 
@@ -77,29 +78,36 @@ def main():
 
     while True:
         try:
-            raw_gpu_data = subprocess.check_output(["nvidia-smi", "-x", "-q"]).decode('utf-8')
+            raw_gpu_data = subprocess.check_output(["nvidia-smi", "-x", "-q"]).decode("utf-8")
             gpu_data = parse_nvidia_xml(raw_gpu_data)
 
             post_data = {
                 "gpu_data": gpu_data,
                 "device_name": device_name
             }
-            encoded_post_data = bytes(json.dumps(post_data, indent=4), 'utf-8')
+            encoded_post_data = bytes(json.dumps(post_data, indent=4), "utf-8")
 
-            time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             print(f"[{time}] Sending request...")
 
-            r = requests.post(server_url, headers=headers, data=encoded_post_data)
+            if verify is not None:
+                r = requests.post(server_url, headers=headers, data=encoded_post_data, verify=verify)
+            else:
+                r = requests.post(server_url, headers=headers, data=encoded_post_data, verify=False)
 
-            time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             print(f"[{time}] Request returned {r.status_code} {r.reason}")
         except Exception as e:
-            time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             print(f"[{time}] Error: {e}")
             pass
         finally:
             sleep(update_interval)
 
 
-if __name__ == '__main__':
-    main()
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--verify", help="path to the certificate file that should be used to verify requests")
+    args = parser.parse_args()
+
+    main(args.verify)
