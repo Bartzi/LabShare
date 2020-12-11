@@ -5,6 +5,7 @@ import logging
 import pwd
 import subprocess
 import sys
+import urllib
 import xml.etree.ElementTree as ET
 from datetime import datetime
 from time import sleep
@@ -67,7 +68,7 @@ def main(args):
     config.read("config.ini")
 
     server_base_url = config["MAIN"]["server_url"]
-    server_url = server_base_url + "/gpu/update"
+    server_url = urllib.parse.urljoin(server_base_url, "/gpu/update")
     update_interval = float(config["MAIN"]["update_interval"])
     device_name = config["MAIN"]["device_name"]
 
@@ -89,12 +90,7 @@ def main(args):
             encoded_post_data = bytes(json.dumps(post_data, indent=4), "utf-8")
 
             logging.info(f"Sending request...")
-
-            if args.verify is not None:
-                r = requests.post(server_url, headers=headers, data=encoded_post_data, verify=args.verify)
-            else:
-                r = requests.post(server_url, headers=headers, data=encoded_post_data, verify=False)
-
+            r = requests.post(server_url, headers=headers, data=encoded_post_data, verify=args.verify)
             logging.info(f"Request returned {r.status_code} {r.reason}")
         except Exception as e:
             logging.error(f"Error: {e}")
@@ -104,7 +100,8 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--verify", help="path to the certificate file that should be used to verify requests")
+    parser.add_argument("--verify", default=False,
+                        help="path to the certificate file that should be used to verify requests")
     parser.add_argument("-v", "--verbose", action="store_true", help="Shows additional log messages")
     args = parser.parse_args()
 
