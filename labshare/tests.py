@@ -1047,6 +1047,7 @@ def working_gpu_data_with_one_gpu_not_in_use():
             },
             "in_use": "no",
             "processes": [],
+            "gpu_util": "25 %",
         }
     ]
 
