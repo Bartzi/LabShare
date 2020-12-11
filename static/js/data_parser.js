@@ -43,29 +43,20 @@ function updateGPUData(data, currentUser) {
 
     const deviceHeading = $('#' + data.name + '_heading');
     const deviceHeadingButton = deviceHeading.find('device-heading-btn')
-    if (any_gpu_in_use) {
-        if (!deviceHeading.hasClass("alert-warning")) {
-            deviceHeading.addClass("alert-warning");
-            deviceHeadingButton.addClass("alert-warning");
-        }
-    } else {
-        if (deviceHeading.hasClass("alert-warning")) {
-            deviceHeading.removeClass("alert-warning");
-            deviceHeadingButton.removeClass("alert-warning");
-        }
-    }
-    if (any_gpu_failed) {
-        if (!deviceHeading.hasClass("alert-danger")) {
-            deviceHeading.addClass("alert-danger");
-            deviceHeadingButton.addClass("alert-danger");
-        }
-    } else {
-        if (deviceHeading.hasClass("alert-danger")) {
-            deviceHeading.removeClass("alert-danger");
-            deviceHeadingButton.removeClass("alert-danger");
+    let flag, classLabel;
+    for ([flag, classLabel] of [[any_gpu_in_use, "alert-warning"], [any_gpu_failed, "alert-danger"]]) {
+        if (flag) {
+            if (!deviceHeading.hasClass(classLabel)) {
+                deviceHeading.addClass(classLabel);
+                deviceHeadingButton.addClass(classLabel);
+            }
+        } else {
+            if (deviceHeading.hasClass(classLabel)) {
+                deviceHeading.removeClass(classLabel);
+                deviceHeadingButton.removeClass(classLabel);
+            }
         }
     }
-
 }
 
 function setupModals() {

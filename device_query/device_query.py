@@ -1,6 +1,7 @@
 import argparse
 import configparser
 import json
+import logging
 import pwd
 import subprocess
 import sys
@@ -61,13 +62,13 @@ def get_owner_for_pid(pid):
             return pwd.getpwuid(uid).pw_name
 
 
-def main(verify):
+def main(args):
     config = configparser.ConfigParser()
     config.read("config.ini")
 
     server_base_url = config["MAIN"]["server_url"]
-    server_url = server_base_url + "gpu/update"  # TODO: https - in the end
-    update_interval = int(config["MAIN"]["update_interval"])
+    server_url = server_base_url + "/gpu/update"
+    update_interval = float(config["MAIN"]["update_interval"])
     device_name = config["MAIN"]["device_name"]
 
     auth_token = config["MAIN"]["token"]
@@ -87,20 +88,16 @@ def main(verify):
             }
             encoded_post_data = bytes(json.dumps(post_data, indent=4), "utf-8")
 
-            time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            print(f"[{time}] Sending request...")
+            logging.info(f"Sending request...")
 
-            if verify is not None:
-                r = requests.post(server_url, headers=headers, data=encoded_post_data, verify=verify)
+            if args.verify is not None:
+                r = requests.post(server_url, headers=headers, data=encoded_post_data, verify=args.verify)
             else:
                 r = requests.post(server_url, headers=headers, data=encoded_post_data, verify=False)
 
-            time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            print(f"[{time}] Request returned {r.status_code} {r.reason}")
+            logging.info(f"Request returned {r.status_code} {r.reason}")
         except Exception as e:
-            time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            print(f"[{time}] Error: {e}")
-            pass
+            logging.error(f"Error: {e}")
         finally:
             sleep(update_interval)
 
@@ -108,6 +105,12 @@ def main(verify):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--verify", help="path to the certificate file that should be used to verify requests")
+    parser.add_argument("-v", "--verbose", action="store_true", help="Shows additional log messages")
     args = parser.parse_args()
 
-    main(args.verify)
+    if args.verbose:
+        logging.basicConfig(format="[%(asctime)s] %(message)s", level=logging.DEBUG)
+    else:
+        logging.basicConfig(format="[%(asctime)s] %(message)s")
+
+    main(args)

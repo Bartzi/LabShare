@@ -24,7 +24,8 @@ from .models import Device, Reservation, GPU, GPUProcess
 @render_to("overview.html")
 def index(request):
     devices = list(filter(lambda device: device.can_be_used_by(request.user), Device.objects.all()))
-    return {"devices": devices}
+    sorted_devices = sorted(devices, key=lambda x: x.name)
+    return {"devices": sorted_devices}
 
 
 @login_required
@@ -241,7 +242,7 @@ def update_gpu_info(request):
                     username=process.get("username", "Unknown"),
                 ).save()
 
-        publish_device_state(device)
+    publish_device_state(device)
 
     return HttpResponse()
 
