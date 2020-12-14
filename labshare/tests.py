@@ -1485,7 +1485,8 @@ class LDAPTests(WebTest):
         return side_effect
 
     def test_ldap_new_user_created_on_login(self):
-        self.assertEqual(User.objects.count(), 1)
+        # Each device creates a user in addition to the AnonymousUser
+        self.assertEqual(User.objects.count(), Device.objects.count() + 1)
         self.assertEqual(Group.objects.get(name=ldap_student_name).user_set.count(), 0)
         with mock.patch('django_auth_ldap.config.LDAPSearch.execute') as mocked_execute:
             mocked_execute.side_effect = self.get_ldap_user_result()
@@ -1495,11 +1496,11 @@ class LDAPTests(WebTest):
                 client = Client()
                 client.login(username=self.username, password=self.password)
 
-                self.assertEqual(User.objects.count(), 2)
+                self.assertEqual(User.objects.count(), Device.objects.count() + 2)
                 self.assertEqual(Group.objects.get(name=ldap_student_name).user_set.count(), 1)
 
     def test_ldap_new_user_created_with_group(self):
-        self.assertEqual(User.objects.count(), 1)
+        self.assertEqual(User.objects.count(), Device.objects.count() + 1)
         self.assertEqual(Group.objects.get(name=ldap_staff_name).user_set.count(), 0)
         self.assertEqual(Group.objects.get(name=ldap_student_name).user_set.count(), 0)
         with mock.patch('django_auth_ldap.config.LDAPSearch.execute') as mocked_execute:
@@ -1510,7 +1511,7 @@ class LDAPTests(WebTest):
                 client = Client()
                 client.login(username=self.username, password=self.password)
 
-                self.assertEqual(User.objects.count(), 2)
+                self.assertEqual(User.objects.count(), Device.objects.count() + 2)
                 self.assertEqual(Group.objects.get(name=ldap_staff_name).user_set.count(), 1)
                 self.assertEqual(Group.objects.get(name=ldap_student_name).user_set.count(), 0)
 
