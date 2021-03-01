@@ -6,12 +6,15 @@ from django.conf import settings
 from django.contrib.auth.models import User
 from django.contrib.contenttypes.models import ContentType
 from django.db import models
+from django.db.models.signals import post_save
+from django.dispatch import receiver
 from django.utils import timezone
+from rest_framework.authtoken.models import Token
 
 
 class Device(models.Model):
     name = models.CharField(max_length=255)
-    ip_address = models.GenericIPAddressField()
+    user = models.OneToOneField(User, on_delete=models.CASCADE)
 
     class Meta:
         permissions = (
@@ -33,6 +36,18 @@ class Device(models.Model):
         }
 
 
+@receiver(post_save, sender=Device)
+def save_device_user(sender, instance, **kwargs):
+    instance.user.save()
+
+
+@receiver(post_save, sender=Device)
+def create_device_auth_token(sender, instance=None, created=False, **kwargs):
+    if created:
+        token = Token.objects.create(user=instance.user)
+        token.save()
+
+
 class GPU(models.Model):
     uuid = models.CharField(unique=True, max_length=255)
     device = models.ForeignKey(Device, related_name="gpus", on_delete=models.CASCADE)
@@ -40,6 +55,7 @@ class GPU(models.Model):
     model_name = models.CharField(max_length=255)
     used_memory = models.CharField(max_length=100)
     total_memory = models.CharField(max_length=100)
+    utilization = models.CharField(max_length=100)
     in_use = models.BooleanField(default=False)
     marked_as_failed = models.BooleanField(default=False)
 
@@ -89,6 +105,7 @@ class GPU(models.Model):
             'name': self.model_name,
             'uuid': self.uuid,
             'memory': self.memory_usage(),
+            'utilization': self.utilization,
             'processes': [process.serialize() for process in self.processes.all()],
             'last_update': self.last_updated.astimezone(pytz.timezone(settings.TIME_ZONE)).isoformat(),
             'failed': self.marked_as_failed,

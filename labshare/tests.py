@@ -21,8 +21,10 @@ from django.urls import reverse
 from django_webtest import WebTest
 from guardian.shortcuts import assign_perm
 from guardian.utils import get_anonymous_user
-from model_mommy import mommy
-from model_mommy.recipe import Recipe
+from model_bakery import baker
+from model_bakery.recipe import Recipe
+from rest_framework import status
+from rest_framework.test import APITestCase
 from selenium import webdriver
 from selenium.common.exceptions import NoSuchElementException
 from selenium.webdriver.common.by import By
@@ -32,12 +34,13 @@ from selenium.webdriver.support.wait import WebDriverWait
 from labshare.consumers import GPUInfoUpdater
 from labshare.models import Device, GPU, Reservation, GPUProcess, EmailAddress
 from labshare.templatetags.icon import icon
-from labshare.utils import get_devices, update_gpu_info, determine_failed_gpus, publish_gpu_states, \
+from labshare.utils import get_devices, determine_failed_gpus, publish_gpu_states, \
     publish_device_state, check_reservations
 
 device_recipe = Recipe(
     Device,
-    name=lambda: ''.join(random.choice(string.ascii_uppercase + string.ascii_lowercase + string.digits) for _ in range(16))
+    name=lambda: ''.join(
+        random.choice(string.ascii_uppercase + string.ascii_lowercase + string.digits) for _ in range(16))
 )
 
 
@@ -48,24 +51,23 @@ def utc_now():
 def make_reservation_in_the_past(user, gpu, distance):
     with mock.patch("django.utils.timezone.now") as mock_now:
         mock_now.return_value = utc_now() - distance
-        reservation = mommy.make(Reservation, gpu=gpu, user=user)
+        reservation = baker.make(Reservation, gpu=gpu, user=user)
         reservation.start_usage()
     return reservation
 
 
 class LabshareTestSetup(WebTest):
-
     csrf_checks = False
 
     @classmethod
     def setUpTestData(cls):
-        cls.user = mommy.make(User, email="user@example.com")
+        cls.user = baker.make(User, email="user@example.com")
         cls.devices = device_recipe.make(_quantity=3)
-        mommy.make(GPU, device=cls.devices[0], _quantity=2, used_memory="12 Mib", total_memory="112 Mib")
-        cls.gpu = mommy.make(GPU, device=cls.devices[1], used_memory="12 Mib", total_memory="112 Mib")
-        mommy.make(GPU, device=cls.devices[-1], used_memory="12 Mib", total_memory="112 Mib")
+        baker.make(GPU, device=cls.devices[0], _quantity=2, used_memory="12 Mib", total_memory="112 Mib")
+        cls.gpu = baker.make(GPU, device=cls.devices[1], used_memory="12 Mib", total_memory="112 Mib")
+        baker.make(GPU, device=cls.devices[-1], used_memory="12 Mib", total_memory="112 Mib")
 
-        cls.group = mommy.make(Group)
+        cls.group = baker.make(Group)
         cls.user.groups.add(cls.group)
 
         for device in cls.devices:
@@ -120,7 +122,7 @@ class TestLabshare(LabshareTestSetup):
         self.assertEqual(Reservation.objects.count(), 1)
 
     def test_reserve_next_available_gpu_one_reserved_gpu(self):
-        mommy.make(Reservation, gpu=self.devices[0].gpus.first(), user=self.user)
+        baker.make(Reservation, gpu=self.devices[0].gpus.first(), user=self.user)
 
         response = self.app.get(reverse("reserve"), user=self.user)
         self.assertEqual(response.status_code, 200)
@@ -138,7 +140,7 @@ class TestLabshare(LabshareTestSetup):
 
     def test_reserve_next_available_gpu_two_reserved_gpus(self):
         for gpu in self.devices[0].gpus.all():
-            mommy.make(Reservation, gpu=gpu, user=self.user)
+            baker.make(Reservation, gpu=gpu, user=self.user)
 
         response = self.app.get(reverse("reserve"), user=self.user)
         self.assertEqual(response.status_code, 200)
@@ -169,7 +171,7 @@ class TestLabshare(LabshareTestSetup):
         self.assertEqual(Reservation.objects.count(), 1)
 
     def test_reserve_next_available_spot_one_gpu_reservation(self):
-        mommy.make(Reservation, gpu=self.devices[1].gpus.first(), user=self.user)
+        baker.make(Reservation, gpu=self.devices[1].gpus.first(), user=self.user)
 
         response = self.app.get(reverse("reserve"), user=self.user)
         self.assertEqual(response.status_code, 200)
@@ -292,7 +294,7 @@ class TestLabshare(LabshareTestSetup):
 
     def test_get_gpu_info_with_reservation(self):
         gpu = self.devices[0].gpus.first()
-        mommy.make(Reservation, gpu=gpu, user=self.user)
+        baker.make(Reservation, gpu=gpu, user=self.user)
         response = self.app.get(
             "{url}?uuid={uuid}".format(url=reverse("gpu_info"), uuid=gpu.uuid),
             expect_errors=True,
@@ -320,16 +322,16 @@ class TestLabshare(LabshareTestSetup):
 
     def test_gpu_done_reservation_wrong_user(self):
         gpu = self.devices[0].gpus.first()
-        user = mommy.make(User)
+        user = baker.make(User)
         user.groups.add(self.group)
-        mommy.make(Reservation, gpu=gpu, user=user)
+        baker.make(Reservation, gpu=gpu, user=user)
 
         response = self.app.post(reverse("done_with_gpu", args=[gpu.id]), user=self.user, expect_errors=True)
         self.assertEqual(response.status_code, 403)
 
     def test_gpu_done_only_one_reservation(self):
         gpu = self.devices[0].gpus.first()
-        mommy.make(Reservation, gpu=gpu, user=self.user)
+        baker.make(Reservation, gpu=gpu, user=self.user)
 
         response = self.app.post(reverse("done_with_gpu", args=[gpu.id]), user=self.user)
         self.assertEqual(response.status_code, 200)
@@ -338,11 +340,11 @@ class TestLabshare(LabshareTestSetup):
     def test_gpu_done_one_more_reservation(self):
         gpu = self.devices[0].gpus.first()
 
-        mommy.make(Reservation, gpu=gpu, user=self.user, user_reserved_next_available_spot=False)
+        baker.make(Reservation, gpu=gpu, user=self.user, user_reserved_next_available_spot=False)
 
-        waiting_user = mommy.make(User, email="waiting_user@example.com")
+        waiting_user = baker.make(User, email="waiting_user@example.com")
         waiting_user.groups.add(self.group)
-        mommy.make(Reservation, gpu=gpu, user=waiting_user)
+        baker.make(Reservation, gpu=gpu, user=waiting_user)
 
         response = self.app.post(reverse("done_with_gpu", args=[gpu.id]), user=self.user)
         self.assertEqual(response.status_code, 200)
@@ -353,13 +355,13 @@ class TestLabshare(LabshareTestSetup):
         self.assertIn(waiting_user.email, mail.outbox[0].to)
 
     def test_gpu_done_next_available_spot_reserved(self):
-        user = mommy.make(User)
+        user = baker.make(User)
         user.groups.add(self.group)
         gpus = self.devices[0].gpus
-        mommy.make(Reservation, gpu=gpus.first(), user=self.user)
-        mommy.make(Reservation, gpu=gpus.last(), user=self.user)
-        mommy.make(Reservation, gpu=gpus.first(), user=user, user_reserved_next_available_spot=True)
-        mommy.make(Reservation, gpu=gpus.last(), user=user, user_reserved_next_available_spot=True)
+        baker.make(Reservation, gpu=gpus.first(), user=self.user)
+        baker.make(Reservation, gpu=gpus.last(), user=self.user)
+        baker.make(Reservation, gpu=gpus.first(), user=user, user_reserved_next_available_spot=True)
+        baker.make(Reservation, gpu=gpus.last(), user=user, user_reserved_next_available_spot=True)
         self.assertEqual(Reservation.objects.count(), 4)
 
         response = self.app.post(reverse("done_with_gpu", args=[gpus.first().id]), user=self.user)
@@ -371,14 +373,14 @@ class TestLabshare(LabshareTestSetup):
         self.assertEqual(gpus.last().reservations.first().user, self.user)
 
     def test_gpu_done_next_available_spot_reserved_additional_reservation(self):
-        user = mommy.make(User)
+        user = baker.make(User)
         user.groups.add(self.group)
         gpus = self.devices[0].gpus
-        mommy.make(Reservation, gpu=gpus.last(), user=self.user)
-        mommy.make(Reservation, gpu=gpus.first(), user=self.user)
-        mommy.make(Reservation, gpu=gpus.first(), user=user, user_reserved_next_available_spot=True)
-        mommy.make(Reservation, gpu=gpus.last(), user=user, user_reserved_next_available_spot=True)
-        mommy.make(Reservation, gpu=gpus.last(), user=self.user)
+        baker.make(Reservation, gpu=gpus.last(), user=self.user)
+        baker.make(Reservation, gpu=gpus.first(), user=self.user)
+        baker.make(Reservation, gpu=gpus.first(), user=user, user_reserved_next_available_spot=True)
+        baker.make(Reservation, gpu=gpus.last(), user=user, user_reserved_next_available_spot=True)
+        baker.make(Reservation, gpu=gpus.last(), user=self.user)
         self.assertEqual(Reservation.objects.count(), 5)
 
         response = self.app.post(reverse("done_with_gpu", args=[gpus.first().id]), user=self.user)
@@ -405,11 +407,11 @@ class TestLabshare(LabshareTestSetup):
 
     def test_cancel_gpu_multiple_reservation(self):
         gpu = self.devices[0].gpus.first()
-        other = mommy.make(User)
+        other = baker.make(User)
         other.groups.add(self.group)
-        mommy.make(Reservation, gpu=gpu, user=self.user)
-        mommy.make(Reservation, gpu=gpu, user=other)
-        mommy.make(Reservation, gpu=gpu, user=self.user)
+        baker.make(Reservation, gpu=gpu, user=self.user)
+        baker.make(Reservation, gpu=gpu, user=other)
+        baker.make(Reservation, gpu=gpu, user=self.user)
 
         self.assertEqual(gpu.last_reservation().user, self.user)
         self.app.post(reverse("cancel_gpu", args=[gpu.id]), user=self.user)
@@ -424,21 +426,21 @@ class TestLabshare(LabshareTestSetup):
 
     def test_cancel_gpu_reservation_wrong_user(self):
         gpu = self.devices[0].gpus.first()
-        users = mommy.make(User, _quantity=2)
+        users = baker.make(User, _quantity=2)
         for user in users:
             user.groups.add(self.group)
-        mommy.make(Reservation, gpu=gpu, user=users[0])
-        mommy.make(Reservation, gpu=gpu, user=users[1])
+        baker.make(Reservation, gpu=gpu, user=users[0])
+        baker.make(Reservation, gpu=gpu, user=users[1])
 
         response = self.app.post(reverse("cancel_gpu", args=[gpu.id]), user=self.user, expect_errors=True)
         self.assertEqual(response.status_code, 404)
 
     def test_cancel_gpu(self):
         gpu = self.devices[0].gpus.first()
-        other = mommy.make(User)
+        other = baker.make(User)
         other.groups.add(self.group)
-        mommy.make(Reservation, gpu=gpu, user=other)
-        mommy.make(Reservation, gpu=gpu, user=self.user)
+        baker.make(Reservation, gpu=gpu, user=other)
+        baker.make(Reservation, gpu=gpu, user=self.user)
 
         self.app.post(reverse("cancel_gpu", args=[gpu.id]), user=self.user)
         self.assertEqual(Reservation.objects.count(), 1)
@@ -448,9 +450,9 @@ class TestLabshare(LabshareTestSetup):
         for gpu in GPU.objects.all():
             last_updated = gpu.last_updated
             self.assertFalse(gpu.last_update_too_long_ago())
-            gpu.last_updated = last_updated - timedelta(minutes = 29)
+            gpu.last_updated = last_updated - timedelta(minutes=29)
             self.assertFalse(gpu.last_update_too_long_ago())
-            gpu.last_updated = last_updated - timedelta(minutes = 30)
+            gpu.last_updated = last_updated - timedelta(minutes=30)
             self.assertTrue(gpu.last_update_too_long_ago())
 
     def test_template_tag_icon_missing_icon_name(self):
@@ -477,15 +479,15 @@ class TestLabshare(LabshareTestSetup):
         self.assertRaises(template.TemplateSyntaxError, icon, parser, token)
 
     def test_device_str_representation(self):
-        device = mommy.prepare(Device)
+        device = baker.prepare(Device)
         self.assertEqual(str(device), device.name)
 
     def test_gpu_str_representation(self):
-        gpu = mommy.prepare(GPU, device=self.devices[0])
+        gpu = baker.prepare(GPU, device=self.devices[0])
         self.assertEqual(str(gpu), gpu.model_name)
 
     def test_reservation_str_representation(self):
-        reservation = mommy.prepare(Reservation, gpu=self.gpu, user=self.user)
+        reservation = baker.prepare(Reservation, gpu=self.gpu, user=self.user)
         self.assertEqual(str(reservation), "{gpu} on {device}, {user}".format(
             gpu=reservation.gpu,
             device=reservation.gpu.device,
@@ -497,7 +499,7 @@ class TestReservationExpiration(LabshareTestSetup):
     @classmethod
     def setUpTestData(cls):
         super().setUpTestData()
-        cls.other_user = mommy.make(User, email="otheruser@example.com")
+        cls.other_user = baker.make(User, email="otheruser@example.com")
         cls.other_user.groups.add(cls.group)
 
     def assertTimeAlmostEqual(self, a, b):
@@ -519,7 +521,7 @@ class TestReservationExpiration(LabshareTestSetup):
         self.assertEqual(Reservation.objects.count(), previous_num_reservations + 1)
 
     def test_new_reservation(self):
-        reservation = mommy.make(Reservation, gpu=self.gpu, user=self.user)
+        reservation = baker.make(Reservation, gpu=self.gpu, user=self.user)
         self.assertIsNone(reservation.usage_started)
         self.assertIsNone(reservation.usage_expires)
         self.assertFalse(reservation.is_usage_expired())
@@ -547,7 +549,7 @@ class TestReservationExpiration(LabshareTestSetup):
 
     def test_extending_reservation(self):
         reservation = make_reservation_in_the_past(self.user, self.gpu,
-                                                        Reservation.usage_period() - Reservation.reminder_period())
+                                                   Reservation.usage_period() - Reservation.reminder_period())
 
         self.assertTrue(reservation.needs_reminder())
         reservation.set_reminder_sent()
@@ -560,7 +562,7 @@ class TestReservationExpiration(LabshareTestSetup):
 
     def test_extend_gpu(self):
         make_reservation_in_the_past(self.user, self.gpu,
-                                          Reservation.usage_period() - Reservation.reminder_period())
+                                     Reservation.usage_period() - Reservation.reminder_period())
 
         self.app.post(reverse("extend_gpu", args=[self.gpu.id]), user=self.user)
         self.assertEqual(Reservation.objects.count(), 1)
@@ -569,7 +571,7 @@ class TestReservationExpiration(LabshareTestSetup):
 
     def test_extend_not_allowed_too_early(self):
         reservation = make_reservation_in_the_past(self.user, self.gpu,
-                                                        Reservation.usage_period() - Reservation.reminder_period() * 2)
+                                                   Reservation.usage_period() - Reservation.reminder_period() * 2)
         previous_expiry = reservation.usage_expires
 
         response = self.app.post(reverse("extend_gpu", args=[self.gpu.id]), user=self.user, expect_errors=True)
@@ -635,17 +637,16 @@ class TestReservationExpiration(LabshareTestSetup):
 
 
 class TestMessages(WebTest):
-
     csrf_checks = False
 
     def setUp(self):
-        self.user = mommy.make(User, is_superuser=True, is_staff=True, email="test@example.com")
+        self.user = baker.make(User, is_superuser=True, is_staff=True, email="test@example.com")
         self.devices = device_recipe.make(_quantity=3)
-        mommy.make(GPU, device=self.devices[0], _quantity=2, used_memory="12 Mib", total_memory="112 Mib")
-        mommy.make(GPU, device=self.devices[1], used_memory="12 Mib", total_memory="112 Mib")
-        mommy.make(GPU, device=self.devices[-1], used_memory="12 Mib", total_memory="112 Mib")
+        baker.make(GPU, device=self.devices[0], _quantity=2, used_memory="12 Mib", total_memory="112 Mib")
+        baker.make(GPU, device=self.devices[1], used_memory="12 Mib", total_memory="112 Mib")
+        baker.make(GPU, device=self.devices[-1], used_memory="12 Mib", total_memory="112 Mib")
 
-        self.group = mommy.make(Group)
+        self.group = baker.make(Group)
         for device in self.devices:
             assign_perm('use_device', self.group, device)
         self.user.groups.add(self.group)
@@ -655,7 +656,7 @@ class TestMessages(WebTest):
         self.assertEqual(response.status_code, 302)
 
     def test_view_message_site_normal_user(self):
-        user = mommy.make(User)
+        user = baker.make(User)
         user.groups.add(self.group)
         response = self.app.get(reverse("send_message"), user=user)
         self.assertEqual(response.status_code, 200)
@@ -714,7 +715,7 @@ class TestMessages(WebTest):
     def test_send_message_to_multiple_users(self):
         response = self.app.get(reverse("send_message"), user=self.user)
         self.assertEqual(response.status_code, 200)
-        _ = mommy.make(User)
+        _ = baker.make(User)
 
         form = response.form
         form['recipients'] = ['1', '2']
@@ -742,7 +743,7 @@ class TestMessages(WebTest):
         self.assertEqual(len(sent_mail.bcc), 0)
 
     def test_send_message_to_all_not_permitted(self):
-        user = mommy.make(User)
+        user = baker.make(User)
         user.groups.add(self.group)
         response = self.app.get(reverse("send_message"), user=user)
         self.assertEqual(response.status_code, 200)
@@ -774,7 +775,7 @@ class TestMessages(WebTest):
         self.assertEqual(len(mail.outbox), 0)
 
     def test_send_message_multiple_email_addresses(self):
-        addresses = [address.email for address in mommy.make(EmailAddress, _quantity=3, user=self.user)]
+        addresses = [address.email for address in baker.make(EmailAddress, _quantity=3, user=self.user)]
         addresses.append(self.user.email)
         response = self.app.get(reverse("send_message"), user=self.user)
         self.assertEqual(response.status_code, 200)
@@ -799,20 +800,19 @@ class TestMessages(WebTest):
 
 
 class GPUProcessTests(WebTest):
-
     csrf_checks = False
 
     def setUp(self):
-        self.user = mommy.make(User, is_superuser=True)
+        self.user = baker.make(User, is_superuser=True)
 
         devices = device_recipe.make(_quantity=3)
         for idx, device in enumerate(devices):
-            gpus = mommy.make(GPU, _quantity=2, device=device)
+            gpus = baker.make(GPU, _quantity=2, device=device)
             for gpu in gpus:
                 if idx == 1:
-                    mommy.make(GPUProcess, gpu=gpu, _quantity=2)
+                    baker.make(GPUProcess, gpu=gpu, _quantity=2)
                 elif idx == 2:
-                    mommy.make(GPUProcess, gpu=gpu)
+                    baker.make(GPUProcess, gpu=gpu)
 
     def test_gpu_process_string(self):
         for process in GPUProcess.objects.all():
@@ -826,24 +826,23 @@ class GPUProcessTests(WebTest):
 
 
 class LabSharePermissionTests(WebTest):
-
     csrf_checks = False
 
     def setUp(self):
-        self.staff_user = mommy.make(User)
-        self.user = mommy.make(User)
+        self.staff_user = baker.make(User)
+        self.user = baker.make(User)
         self.devices = device_recipe.make(_quantity=3)
-        mommy.make(GPU, device=self.devices[0], _quantity=2, used_memory="12 Mib", total_memory="112 Mib")
-        mommy.make(GPU, device=self.devices[1], used_memory="12 Mib", total_memory="112 Mib")
-        mommy.make(GPU, device=self.devices[-1], used_memory="12 Mib", total_memory="112 Mib")
+        baker.make(GPU, device=self.devices[0], _quantity=2, used_memory="12 Mib", total_memory="112 Mib")
+        baker.make(GPU, device=self.devices[1], used_memory="12 Mib", total_memory="112 Mib")
+        baker.make(GPU, device=self.devices[-1], used_memory="12 Mib", total_memory="112 Mib")
 
-        self.student_group = mommy.make(Group, name="students")
+        self.student_group = baker.make(Group, name="students")
         self.user.groups.add(self.student_group)
 
         for device in self.devices[:-1]:
             assign_perm('use_device', self.student_group, device)
 
-        self.staff_group = mommy.make(Group, name="staff")
+        self.staff_group = baker.make(Group, name="staff")
         self.staff_user.groups.add(self.staff_group)
 
         for device in self.devices:
@@ -926,43 +925,51 @@ class LabSharePermissionTests(WebTest):
         self.assertEqual(response.status_code, 404)
 
     def test_gpu_listing(self):
-        response = self.app.get(reverse('gpus_for_device') + '?device_name={}'.format(self.devices[0].name), user=self.user, xhr=True)
+        response = self.app.get(reverse('gpus_for_device') + '?device_name={}'.format(self.devices[0].name),
+                                user=self.user, xhr=True)
         self.assertEqual(response.status_code, 200)
 
-        response = self.app.get(reverse('gpus_for_device') + '?device_name={}'.format(self.devices[-1].name), user=self.user, expect_errors=True, xhr=True)
+        response = self.app.get(reverse('gpus_for_device') + '?device_name={}'.format(self.devices[-1].name),
+                                user=self.user, expect_errors=True, xhr=True)
         self.assertEqual(response.status_code, 403)
 
-        response = self.app.get(reverse('gpus_for_device') + '?device_name={}'.format(self.devices[-1].name), user=self.staff_user, xhr=True)
+        response = self.app.get(reverse('gpus_for_device') + '?device_name={}'.format(self.devices[-1].name),
+                                user=self.staff_user, xhr=True)
         self.assertEqual(response.status_code, 200)
 
     def test_gpu_listing_non_existing_gpu_name(self):
         names_to_test = ['undefined', 'a_name_that_will_never_exist_at_least_we_hope_so']
         for name in names_to_test:
-            response = self.app.get(reverse('gpus_for_device') + '?device_name={}'.format(name), user=self.user, xhr=True, expect_errors=True)
+            response = self.app.get(reverse('gpus_for_device') + '?device_name={}'.format(name), user=self.user,
+                                    xhr=True, expect_errors=True)
             self.assertEqual(response.status_code, 404)
 
     def test_gpu_info(self):
-        response = self.app.get(reverse('gpu_info') + '?uuid={}'.format(self.devices[0].gpus.first().uuid), user=self.user, xhr=True)
+        response = self.app.get(reverse('gpu_info') + '?uuid={}'.format(self.devices[0].gpus.first().uuid),
+                                user=self.user, xhr=True)
         self.assertEqual(response.status_code, 200)
 
-        response = self.app.get(reverse('gpu_info') + '?uuid={}'.format(self.devices[-1].gpus.first().uuid), user=self.user, expect_errors=True, xhr=True)
+        response = self.app.get(reverse('gpu_info') + '?uuid={}'.format(self.devices[-1].gpus.first().uuid),
+                                user=self.user, expect_errors=True, xhr=True)
         self.assertEqual(response.status_code, 403)
 
-        response = self.app.get(reverse('gpu_info') + '?uuid={}'.format(self.devices[-1].gpus.first().uuid), user=self.staff_user, xhr=True)
+        response = self.app.get(reverse('gpu_info') + '?uuid={}'.format(self.devices[-1].gpus.first().uuid),
+                                user=self.staff_user, xhr=True)
         self.assertEqual(response.status_code, 200)
 
     def test_gpu_info_non_existent_gpu(self):
         ids_to_test = ['undefined', 'a_name_that_will_never_exist_at_least_we_hope_so']
         for id in ids_to_test:
-            response = self.app.get(reverse('gpu_info') + '?uuid={}'.format(id), user=self.user, xhr=True, expect_errors=True)
+            response = self.app.get(reverse('gpu_info') + '?uuid={}'.format(id), user=self.user, xhr=True,
+                                    expect_errors=True)
             self.assertEqual(response.status_code, 404)
 
     def test_gpu_done(self):
-        mommy.make(Reservation, gpu=self.devices[0].gpus.first(), user=self.user)
+        baker.make(Reservation, gpu=self.devices[0].gpus.first(), user=self.user)
         response = self.app.post(reverse("done_with_gpu", args=[self.devices[0].gpus.first().id]), user=self.user)
         self.assertEqual(response.status_code, 200)
 
-        mommy.make(Reservation, gpu=self.devices[-1].gpus.first(), user=self.staff_user)
+        baker.make(Reservation, gpu=self.devices[-1].gpus.first(), user=self.staff_user)
         response = self.app.post(
             reverse("done_with_gpu", args=[self.devices[-1].gpus.first().id]),
             user=self.user,
@@ -971,7 +978,8 @@ class LabSharePermissionTests(WebTest):
         self.assertEqual(response.status_code, 403)
         self.assertEqual(Reservation.objects.count(), 1)
 
-        response = self.app.post(reverse("done_with_gpu", args=[self.devices[-1].gpus.first().id]), user=self.staff_user)
+        response = self.app.post(reverse("done_with_gpu", args=[self.devices[-1].gpus.first().id]),
+                                 user=self.staff_user)
         self.assertEqual(response.status_code, 200)
 
         response = self.app.get(
@@ -982,11 +990,11 @@ class LabSharePermissionTests(WebTest):
         self.assertEqual(response.status_code, 400)
 
     def test_gpu_cancel(self):
-        current_user = mommy.make(User)
+        current_user = baker.make(User)
         current_user.groups.add(self.student_group)
 
-        mommy.make(Reservation, gpu=self.devices[0].gpus.first(), user=current_user)
-        mommy.make(Reservation, gpu=self.devices[0].gpus.first(), user=self.user)
+        baker.make(Reservation, gpu=self.devices[0].gpus.first(), user=current_user)
+        baker.make(Reservation, gpu=self.devices[0].gpus.first(), user=self.user)
 
         # the user who holds the current reservation is not allowed to cancel (only mark as done)
         response = self.app.post(reverse("cancel_gpu", args=[self.devices[0].gpus.first().id]), user=current_user,
@@ -997,8 +1005,8 @@ class LabSharePermissionTests(WebTest):
         response = self.app.post(reverse("cancel_gpu", args=[self.devices[0].gpus.first().id]), user=self.user)
         self.assertEqual(response.status_code, 200)
 
-        mommy.make(Reservation, gpu=self.devices[-1].gpus.first(), user=current_user)
-        mommy.make(Reservation, gpu=self.devices[-1].gpus.first(), user=self.staff_user)
+        baker.make(Reservation, gpu=self.devices[-1].gpus.first(), user=current_user)
+        baker.make(Reservation, gpu=self.devices[-1].gpus.first(), user=self.staff_user)
         response = self.app.post(reverse("cancel_gpu", args=[self.devices[-1].gpus.first().id]), user=self.user,
                                  expect_errors=True)
         self.assertEqual(response.status_code, 403)
@@ -1018,8 +1026,8 @@ class LabSharePermissionTests(WebTest):
 class EmailAddressTests(WebTest):
 
     def setUp(self):
-        user = mommy.make(User)
-        mommy.make(EmailAddress, _quantity=5, user=user)
+        user = baker.make(User)
+        baker.make(EmailAddress, _quantity=5, user=user)
 
     def test_stringify_email_address(self):
         for address in EmailAddress.objects.all():
@@ -1027,12 +1035,8 @@ class EmailAddressTests(WebTest):
             self.assertEqual(str(address), address_info)
 
 
-def fail_url(url, timeout=None):
-    raise URLError("400")
-
-
-def working_gpu_data_with_one_gpu_not_in_use(url, timeout=None):
-    return json.dumps([
+def working_gpu_data_with_one_gpu_not_in_use():
+    return [
         {
             "name": "Test GPU",
             "uuid": "lorem",
@@ -1043,13 +1047,14 @@ def working_gpu_data_with_one_gpu_not_in_use(url, timeout=None):
             },
             "in_use": "no",
             "processes": [],
+            "gpu_util": "25 %",
         }
-    ])
+    ]
 
 
-def working_gpu_data_with_one_gpu_in_use(url, timeout=None):
-    base_data = working_gpu_data_with_one_gpu_not_in_use(url, timeout=timeout)
-    base_data = json.loads(base_data)[0]
+def working_gpu_data_with_one_gpu_in_use():
+    base_data = working_gpu_data_with_one_gpu_not_in_use()
+    base_data = base_data[0]
     base_data["in_use"] = "yes"
     base_data["processes"] = [
         {
@@ -1059,22 +1064,29 @@ def working_gpu_data_with_one_gpu_in_use(url, timeout=None):
             "used_memory": "10 MB",
         }
     ]
-    return json.dumps([base_data])
+    return [base_data]
 
 
-def working_gpu_data_with_one_gpu_use_na_false(url, timeout=None):
-    base_data = working_gpu_data_with_one_gpu_not_in_use(url, timeout=timeout)
-    base_data = json.loads(base_data)[0]
+def working_gpu_data_with_one_gpu_use_na_false():
+    base_data = working_gpu_data_with_one_gpu_not_in_use()
+    base_data = base_data[0]
     base_data["in_use"] = "na"
-    return json.dumps([base_data])
+    return [base_data]
 
 
-def working_gpu_data_with_one_gpu_use_na_true(url, timeout=None):
-    base_data = working_gpu_data_with_one_gpu_not_in_use(url, timeout=timeout)
-    base_data = json.loads(base_data)[0]
+def working_gpu_data_with_one_gpu_use_na_true():
+    base_data = working_gpu_data_with_one_gpu_not_in_use()
+    base_data = base_data[0]
     base_data["in_use"] = "na"
     base_data["memory"]["used"] = "900 MB"
-    return json.dumps([base_data])
+    return [base_data]
+
+
+def request_data(device_name, data_function):
+    return {
+        "gpu_data": data_function(),
+        "device_name": device_name
+    }
 
 
 def return_bytes_io(func):
@@ -1082,85 +1094,92 @@ def return_bytes_io(func):
         data = func(*args, **kwargs)
         stream = io.BytesIO(bytearray(data, encoding='utf-8'))
         return stream
+
     return wrapper
 
 
-class UpdateGPUTests(TestCase):
+class UpdateGPUTests(APITestCase):
 
     def setUp(self):
         self.device = device_recipe.make()
+        self.url = reverse("update_gpu_info")
+        user = self.device.user
+        self.client.force_authenticate(user=user)
 
-    @mock.patch("urllib.request.urlopen", fail_url)
-    def test_update_gpu_info_no_gpu_works(self):
-        mommy.make(Device)
-        for device in Device.objects.all():
-            mommy.make(GPU, device=device, _quantity=2)
-        pre_call_last_update = [gpu.last_updated for gpu in GPU.objects.all()]
-        update_gpu_info()
-        post_call_last_update = [gpu.last_updated for gpu in GPU.objects.all()]
-        for timestamp_before_call, timestamp_after_call in zip(pre_call_last_update, post_call_last_update):
-            self.assertEqual(timestamp_before_call, timestamp_after_call)
-
-    @mock.patch("urllib.request.urlopen", return_bytes_io(working_gpu_data_with_one_gpu_not_in_use))
     def test_update_gpu_info_new_gpu(self):
         self.assertEqual(GPU.objects.count(), 0)
-        update_gpu_info()
+        response = self.client.post(self.url,
+                                    request_data(self.device.name, working_gpu_data_with_one_gpu_not_in_use),
+                                    format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(GPU.objects.count(), 1)
 
-    @mock.patch("urllib.request.urlopen", return_bytes_io(working_gpu_data_with_one_gpu_in_use))
     def test_update_gpu_info_new_gpu_in_use(self):
         self.assertEqual(GPU.objects.count(), 0)
-        update_gpu_info()
+        response = self.client.post(self.url,
+                                    request_data(self.device.name, working_gpu_data_with_one_gpu_in_use),
+                                    format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(GPU.objects.count(), 1)
         gpu = GPU.objects.get()
         self.assertTrue(gpu.in_use)
         self.assertEqual(GPUProcess.objects.count(), 1)
 
-    @mock.patch("urllib.request.urlopen", return_bytes_io(working_gpu_data_with_one_gpu_use_na_false))
     def test_update_gpu_info_new_gpu_use_na_false(self):
         self.assertEqual(GPU.objects.count(), 0)
-        update_gpu_info()
+        response = self.client.post(self.url,
+                                    request_data(self.device.name, working_gpu_data_with_one_gpu_use_na_false),
+                                    format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(GPU.objects.count(), 1)
         gpu = GPU.objects.get()
         self.assertFalse(gpu.in_use)
 
-    @mock.patch("urllib.request.urlopen", return_bytes_io(working_gpu_data_with_one_gpu_use_na_true))
     def test_update_gpu_info_new_gpu_use_na_true(self):
         self.assertEqual(GPU.objects.count(), 0)
-        update_gpu_info()
+        response = self.client.post(self.url,
+                                    request_data(self.device.name, working_gpu_data_with_one_gpu_use_na_true),
+                                    format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(GPU.objects.count(), 1)
         gpu = GPU.objects.get()
         self.assertTrue(gpu.in_use)
 
-    @mock.patch("urllib.request.urlopen", return_bytes_io(working_gpu_data_with_one_gpu_in_use))
     def test_update_gpu_info_old_gpu_switch_to_in_use(self):
-        mommy.make(GPU, device=self.device, uuid="lorem", in_use=False)
+        baker.make(GPU, device=self.device, uuid="lorem", in_use=False)
         self.assertEqual(GPU.objects.count(), 1)
         self.assertEqual(GPUProcess.objects.count(), 0)
-        update_gpu_info()
+        response = self.client.post(self.url,
+                                    request_data(self.device.name, working_gpu_data_with_one_gpu_in_use),
+                                    format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(GPU.objects.count(), 1)
         gpu = GPU.objects.get()
         self.assertTrue(gpu.in_use)
         self.assertEqual(GPUProcess.objects.count(), 1)
 
-    @mock.patch("urllib.request.urlopen", return_bytes_io(working_gpu_data_with_one_gpu_in_use))
     def test_update_gpu_info_old_gpu_add_new_in_use_gpu(self):
-        mommy.make(GPU, device=self.device, uuid="test", in_use=False)
+        baker.make(GPU, device=self.device, uuid="test", in_use=False)
         self.assertEqual(GPU.objects.count(), 1)
         self.assertEqual(GPUProcess.objects.count(), 0)
-        update_gpu_info()
+        response = self.client.post(self.url,
+                                    request_data(self.device.name, working_gpu_data_with_one_gpu_in_use),
+                                    format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(GPU.objects.count(), 2)
         gpu = GPU.objects.get(uuid="lorem")
         self.assertTrue(gpu.in_use)
         self.assertEqual(GPUProcess.objects.count(), 1)
 
-    @mock.patch("urllib.request.urlopen", return_bytes_io(working_gpu_data_with_one_gpu_in_use))
     def test_update_gpu_info_old_gpu_add_new_processes(self):
-        gpu = mommy.make(GPU, device=self.device, uuid="lorem", in_use=False)
-        process = mommy.make(GPUProcess, gpu=gpu)
+        gpu = baker.make(GPU, device=self.device, uuid="lorem", in_use=False)
+        process = baker.make(GPUProcess, gpu=gpu)
         self.assertEqual(GPU.objects.count(), 1)
         self.assertEqual(GPUProcess.objects.count(), 1)
-        update_gpu_info()
+        response = self.client.post(self.url,
+                                    request_data(self.device.name, working_gpu_data_with_one_gpu_in_use),
+                                    format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(GPU.objects.count(), 1)
         gpu = GPU.objects.get(uuid="lorem")
         self.assertTrue(gpu.in_use)
@@ -1177,9 +1196,9 @@ class FailedGPUTests(TestCase):
     def setUp(self):
         with mock.patch("django.utils.timezone.now") as mock_now:
             mock_now.return_value = utc_now() - datetime.timedelta(hours=2)
-            self.gpu_1 = mommy.make(GPU)
-        self.gpu_2 = mommy.make(GPU)
-        self.user = mommy.make(User)
+            self.gpu_1 = baker.make(GPU)
+        self.gpu_2 = baker.make(GPU)
+        self.user = baker.make(User)
 
     def test_failed_gpus_fresh_fail(self):
         pre_last_update = self.gpu_1.last_updated
@@ -1191,8 +1210,8 @@ class FailedGPUTests(TestCase):
         self.assertEqual(gpu.last_updated, pre_last_update)
 
     def test_failed_gpus_with_user_with_single_email(self):
-        mommy.make(Reservation, user=self.user, gpu=self.gpu_1)
-        mommy.make(Reservation, user=self.user, gpu=self.gpu_2)
+        baker.make(Reservation, user=self.user, gpu=self.gpu_1)
+        baker.make(Reservation, user=self.user, gpu=self.gpu_2)
 
         pre_last_update = self.gpu_1.last_updated
         determine_failed_gpus()
@@ -1205,9 +1224,9 @@ class FailedGPUTests(TestCase):
         self.assertEqual(gpu.last_updated, pre_last_update)
 
     def test_failed_gpus_with_multiple_email_addresses(self):
-        mommy.make(Reservation, user=self.user, gpu=self.gpu_1)
-        mommy.make(Reservation, user=self.user, gpu=self.gpu_2)
-        mommy.make(EmailAddress, user=self.user, _quantity=2)
+        baker.make(Reservation, user=self.user, gpu=self.gpu_1)
+        baker.make(Reservation, user=self.user, gpu=self.gpu_2)
+        baker.make(EmailAddress, user=self.user, _quantity=2)
         all_email_addresses = [address.email for address in EmailAddress.objects.filter(user=self.user)]
         all_email_addresses.append(self.user.email)
 
@@ -1232,7 +1251,7 @@ class FailedGPUTests(TestCase):
         self.assertEqual(len(mail.outbox), 0)
 
     def test_multiple_failed_gpus(self):
-        mommy.make(Reservation, user=self.user, gpu=self.gpu_1)
+        baker.make(Reservation, user=self.user, gpu=self.gpu_1)
         with mock.patch("django.utils.timezone.now") as mock_now:
             mock_now.return_value = utc_now() - datetime.timedelta(hours=2)
             self.gpu_2.model_name = "new name to force date change"
@@ -1271,8 +1290,8 @@ class HijackTests(WebTest):
 
     @classmethod
     def setUpTestData(cls):
-        cls.super_user = mommy.make(User, is_superuser=True, is_staff=True)
-        cls.user = mommy.make(User)
+        cls.super_user = baker.make(User, is_superuser=True, is_staff=True)
+        cls.user = baker.make(User)
 
     def test_superuser_can_see_link(self):
         response = self.app.get(reverse("index"), user=self.super_user)
@@ -1323,11 +1342,11 @@ class PublishMethodTests(TestCase):
     def setUp(self):
         self.device = device_recipe.make()
         self.device_2 = device_recipe.make()
-        self.user = mommy.make(User)
+        self.user = baker.make(User)
         assign_perm('labshare.use_device', self.user, self.device)
 
-        mommy.make(GPU, device=self.device, _quantity=2)
-        mommy.make(GPU, device=self.device_2, _quantity=2)
+        baker.make(GPU, device=self.device, _quantity=2)
+        baker.make(GPU, device=self.device_2, _quantity=2)
 
     @mock.patch('labshare.utils.async_to_sync', async_to_sync_mock)
     def test_publish_gpu_states(self):
@@ -1367,11 +1386,11 @@ class ConsumerTests(TestCase):
     def setUp(self):
         self.device = device_recipe.make()
         self.device_2 = device_recipe.make()
-        self.user = mommy.make(User)
+        self.user = baker.make(User)
         assign_perm('labshare.use_device', self.user, self.device)
 
-        mommy.make(GPU, device=self.device, _quantity=2)
-        mommy.make(GPU, device=self.device_2, _quantity=2)
+        baker.make(GPU, device=self.device, _quantity=2)
+        baker.make(GPU, device=self.device_2, _quantity=2)
 
         self.scope = {
             "user": self.user,
@@ -1428,7 +1447,7 @@ class LDAPTests(WebTest):
     @classmethod
     def setUpTestData(cls):
         cls.staff_group = Group.objects.get(name=ldap_staff_name)
-        cls.student_group = mommy.make(Group, name=ldap_student_name)
+        cls.student_group = baker.make(Group, name=ldap_student_name)
 
         cls.device = device_recipe.make()
         assign_perm('labshare.use_device', cls.staff_group, cls.device)
@@ -1453,7 +1472,8 @@ class LDAPTests(WebTest):
             return [(
                 'uid=test,ou=people,dc=example,dc=com',
                 {
-                    "objectclass": ['top', 'person', 'organizationalPerson', 'inetOrgPerson', 'posixAccount', 'shadowAccount'],
+                    "objectclass": ['top', 'person', 'organizationalPerson', 'inetOrgPerson', 'posixAccount',
+                                    'shadowAccount'],
                     "sn": ['test'],
                     "cn": ['test'],
                     'uidnumber': ['1'],
@@ -1461,10 +1481,12 @@ class LDAPTests(WebTest):
                     'mail': list(email_addresses),
                 }
             )]
+
         return side_effect
 
     def test_ldap_new_user_created_on_login(self):
-        self.assertEqual(User.objects.count(), 1)
+        # Each device creates a user in addition to the AnonymousUser
+        self.assertEqual(User.objects.count(), Device.objects.count() + 1)
         self.assertEqual(Group.objects.get(name=ldap_student_name).user_set.count(), 0)
         with mock.patch('django_auth_ldap.config.LDAPSearch.execute') as mocked_execute:
             mocked_execute.side_effect = self.get_ldap_user_result()
@@ -1474,11 +1496,11 @@ class LDAPTests(WebTest):
                 client = Client()
                 client.login(username=self.username, password=self.password)
 
-                self.assertEqual(User.objects.count(), 2)
+                self.assertEqual(User.objects.count(), Device.objects.count() + 2)
                 self.assertEqual(Group.objects.get(name=ldap_student_name).user_set.count(), 1)
 
     def test_ldap_new_user_created_with_group(self):
-        self.assertEqual(User.objects.count(), 1)
+        self.assertEqual(User.objects.count(), Device.objects.count() + 1)
         self.assertEqual(Group.objects.get(name=ldap_staff_name).user_set.count(), 0)
         self.assertEqual(Group.objects.get(name=ldap_student_name).user_set.count(), 0)
         with mock.patch('django_auth_ldap.config.LDAPSearch.execute') as mocked_execute:
@@ -1489,7 +1511,7 @@ class LDAPTests(WebTest):
                 client = Client()
                 client.login(username=self.username, password=self.password)
 
-                self.assertEqual(User.objects.count(), 2)
+                self.assertEqual(User.objects.count(), Device.objects.count() + 2)
                 self.assertEqual(Group.objects.get(name=ldap_staff_name).user_set.count(), 1)
                 self.assertEqual(Group.objects.get(name=ldap_student_name).user_set.count(), 0)
 
@@ -1513,7 +1535,8 @@ class LDAPTests(WebTest):
 
     def test_ldap_add_multiple_mail_addresses(self):
         with mock.patch('django_auth_ldap.config.LDAPSearch.execute') as mocked_execute:
-            mocked_execute.side_effect = self.get_ldap_user_result(email_addresses=['t@t.com', 'test@test.com', 'test@example.com'])
+            mocked_execute.side_effect = self.get_ldap_user_result(
+                email_addresses=['t@t.com', 'test@test.com', 'test@example.com'])
             with mock.patch('django_auth_ldap.backend._LDAPUser._bind_as') as mocked_bind:
                 mocked_bind.return_value = None
 
@@ -1586,28 +1609,28 @@ class FrontendTestsBase(ChannelsLiveServerTestCase):
 
         cls.password = 'test'
 
-        cls.staff_user = mommy.make(User, is_superuser=True)
+        cls.staff_user = baker.make(User, is_superuser=True)
         cls.staff_user.set_password(cls.password)
         cls.staff_user.save()
 
-        cls.user = mommy.make(User)
+        cls.user = baker.make(User)
         cls.user.set_password(cls.password)
         cls.user.save()
 
         cls.device_1 = device_recipe.make()
-        gpus = mommy.make(GPU, device=cls.device_1, _quantity=4)
-        mommy.make(GPUProcess, gpu=gpus[0])
-        mommy.make(GPUProcess, gpu=gpus[1])
-        mommy.make(Reservation, user=cls.staff_user, gpu=gpus[0])
-        mommy.make(Reservation, user=cls.user, gpu=gpus[1])
-        mommy.make(Reservation, user=cls.staff_user, gpu=gpus[1])
+        gpus = baker.make(GPU, device=cls.device_1, _quantity=4)
+        baker.make(GPUProcess, gpu=gpus[0])
+        baker.make(GPUProcess, gpu=gpus[1])
+        baker.make(Reservation, user=cls.staff_user, gpu=gpus[0])
+        baker.make(Reservation, user=cls.user, gpu=gpus[1])
+        baker.make(Reservation, user=cls.staff_user, gpu=gpus[1])
         assign_perm('labshare.use_device', cls.user, cls.device_1)
         make_reservation_in_the_past(cls.staff_user, gpus[3], Reservation.usage_period() - timedelta(days=1))
 
         cls.device_2 = device_recipe.make()
-        gpus = mommy.make(GPU, device=cls.device_2, _quantity=2)
-        mommy.make(GPUProcess, gpu=gpus[0], _quantity=2)
-        mommy.make(Reservation, user=cls.staff_user, gpu=gpus[0])
+        gpus = baker.make(GPU, device=cls.device_2, _quantity=2)
+        baker.make(GPUProcess, gpu=gpus[0], _quantity=2)
+        baker.make(Reservation, user=cls.staff_user, gpu=gpus[0])
 
     def setUp(self):
         self.login_user(self.staff_user.username)
@@ -1730,7 +1753,8 @@ class FrontendOverviewNonSuperuserTest(FrontendTestsBase):
 
     def test_overview_table_populated_with_device_data_for_non_superuser(self):
         WebDriverWait(self.driver, 2).until(
-            lambda _: all(EC.presence_of_element_located((By.ID, gpu.uuid)) for gpu in GPU.objects.filter(device=self.device_1)),
+            lambda _: all(
+                EC.presence_of_element_located((By.ID, gpu.uuid)) for gpu in GPU.objects.filter(device=self.device_1)),
             "Gpus did not show up on page, Websocket Connection not okay?"
         )
 
@@ -1774,7 +1798,8 @@ class FrontendOverviewExtendButtonTest(FrontendTestsBase):
 
         self.wait_for_page_load()
         reservation = Reservation.objects.filter(gpu=self.device_1.gpus.last()).first()
-        self.assertGreater(abs(utc_now() - reservation.usage_expires), Reservation.usage_period() - timedelta(minutes=1))
+        self.assertGreater(abs(utc_now() - reservation.usage_expires),
+                           Reservation.usage_period() - timedelta(minutes=1))
 
         gpu = self.driver.find_element_by_id(self.device_1.gpus.last().uuid)
         extend_button_group = gpu.find_element_by_class_name("gpu-extend-button-group")

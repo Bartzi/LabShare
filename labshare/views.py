@@ -5,23 +5,27 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.core.exceptions import ObjectDoesNotExist, PermissionDenied, SuspiciousOperation
 from django.core.mail import EmailMessage
-from django.http import HttpResponseRedirect, HttpResponseBadRequest, HttpResponse, HttpResponseForbidden, Http404
+from django.http import HttpResponseRedirect, HttpResponse, Http404
 from django.shortcuts import get_object_or_404
 from django.urls import reverse
 from django.views.decorators.csrf import ensure_csrf_cookie
+from rest_framework.authentication import TokenAuthentication
+from rest_framework.decorators import api_view, authentication_classes, permission_classes
+from rest_framework.permissions import IsAuthenticated
 
-from .forms import DeviceSelectForm, MessageForm, ViewAsForm
+from labshare.decorators import render_to
 from labshare.utils import send_reservation_mail_for, send_gpu_done_mail, login_required_ajax, publish_device_state, \
     delete_reservation
-from .models import Device, Reservation, GPU
-from labshare.decorators import render_to
+from .forms import DeviceSelectForm, MessageForm, ViewAsForm
+from .models import Device, Reservation, GPU, GPUProcess
 
 
 @ensure_csrf_cookie
 @render_to("overview.html")
 def index(request):
     devices = list(filter(lambda device: device.can_be_used_by(request.user), Device.objects.all()))
-    return {"devices": devices}
+    sorted_devices = sorted(devices, key=lambda x: x.name)
+    return {"devices": sorted_devices}
 
 
 @login_required
@@ -187,6 +191,62 @@ def gpu_cancel(request, gpu_id):
     return HttpResponse()
 
 
+@api_view(['POST'])
+@authentication_classes((TokenAuthentication,))
+@permission_classes((IsAuthenticated,))
+def update_gpu_info(request):
+    if request.method != "POST":
+        raise SuspiciousOperation
+
+    data = json.loads(request.read().decode("utf-8"))
+    device_name = data["device_name"]
+    device = Device.objects.get(name=device_name)  # Device should exist because it's authorized
+
+    for gpu_data in data["gpu_data"]:
+        gpu = GPU.objects.filter(device=device, uuid=gpu_data["uuid"])
+
+        gpu_in_use = True if gpu_data.get("in_use", "na") == "yes" else False
+        if gpu_data.get("in_use", "na") == "na":
+            # assume that device is in use if more than 800 MiB of video ram are in use
+            gpu_in_use = int(gpu_data["memory"]["used"].split()[0]) > 800
+
+        if not gpu.exists():
+            gpu = GPU(
+                device=device,
+                model_name=gpu_data["name"],
+                uuid=gpu_data["uuid"],
+                used_memory=gpu_data["memory"]["used"],
+                total_memory=gpu_data["memory"]["total"],
+                utilization=gpu_data["gpu_util"],
+                in_use=gpu_in_use,
+            )
+        else:
+            gpu = gpu.get()
+            gpu.utilization = gpu_data["gpu_util"]
+            memory_info = gpu_data["memory"]
+            gpu.used_memory = memory_info["used"]
+            gpu.total_memory = memory_info["total"]
+            gpu.in_use = gpu_in_use
+            gpu.marked_as_failed = False
+        gpu.save()
+
+        gpu.processes.all().delete()
+        if gpu_in_use:
+            # save processes if this is supported by the GPU
+            for process in gpu_data.get('processes', []):
+                GPUProcess(
+                    gpu=gpu,
+                    name=process.get("name", "Unknown"),
+                    pid=int(process.get("pid", "0")),
+                    memory_usage=process.get("used_memory", "Unknown"),
+                    username=process.get("username", "Unknown"),
+                ).save()
+
+    publish_device_state(device)
+
+    return HttpResponse()
+
+
 @login_required
 @render_to("send_message.html")
 def send_message(request):
@@ -217,12 +277,12 @@ def send_message(request):
         message = form.cleaned_data.get('message')
 
         email = EmailMessage(
-                subject="[Labshare] {}".format(subject),
-                body=message,
-                from_email=sender.email,
-                to=email_addresses,
-                bcc=bcc_addresses,
-                cc=sender_addresses,
+            subject="[Labshare] {}".format(subject),
+            body=message,
+            from_email=sender.email,
+            to=email_addresses,
+            bcc=bcc_addresses,
+            cc=sender_addresses,
         )
         email.send()
 
