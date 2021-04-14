@@ -29,7 +29,7 @@ class LDAPBackend(DjangoLDAPBackend):
     def set_groups_of_user(self, user):
         user_groups = user.ldap_user.group_dns
         ldap_user_groups = Group.objects.filter(
-            name__in=[settings.AUTH_LDAP_GROUP_MAP[group_name] for group_name in user_groups]
+            name__in=[settings.AUTH_LDAP_GROUP_MAP.get(group_name, None) for group_name in user_groups]
         )
         user_groups = user.groups.all()
 
