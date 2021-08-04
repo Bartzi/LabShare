@@ -12,7 +12,7 @@ jobs:
     strategy:
       matrix:
         python-version: ['3.7', '3.8', '3.9']
-    name: Labshare on ${{ matrix.python-version }}
+    name: Labshare on Python ${{ matrix.python-version }}
     steps:
       - name: Check out Repo
         uses: actions/checkout@v2
@@ -36,8 +36,21 @@ jobs:
       - name: setup database
         run: python manage.py migrate
       - name: run tests
-        run: coverage run manage.py test
+        run: coverage run --source=labshare manage.py test
       - name: Coveralls
-        uses: coverallsapp/github-action@master
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+        run: coveralls --service=github
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          COVERALLS_PARALLEL: true
+          COVERALLS_FLAG_NAME: ${{ matrix.test-name }}
+  coveralls:
+    name: Tell coveralls we are finished
+    needs: tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Finished
+        run: |
+          pip3 install --upgrade coveralls
+          coveralls --service=github --finish
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
