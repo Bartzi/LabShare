@@ -1684,7 +1684,6 @@ class FrontendTestsBase(ChannelsLiveServerTestCase):
         self.driver.switch_to_window(self.driver.window_handles[window_id])
 
 
-@skipIf("TRAVIS" in os.environ and os.environ["TRAVIS"] == "true", "Skipping this test on Travis CI.")
 class FrontendOverviewNonSuperuserTest(FrontendTestsBase):
 
     def setUp(self):
@@ -1704,13 +1703,13 @@ class FrontendOverviewNonSuperuserTest(FrontendTestsBase):
             self.assertRaises(NoSuchElementException, self.driver.find_element_by_id, gpu.uuid)
 
 
-@skipIf("TRAVIS" in os.environ and os.environ["TRAVIS"] == "true", "Skipping this test on Travis CI.")
+@skipIf("GITHUB_ACTIONS" in os.environ and os.environ["GITHUB_ACTIONS"] == "true", "Skipping this test on Github Actions.")
 class FrontendOverviewProcessListTest(FrontendTestsBase):
 
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.driver.implicitly_wait(0.5)
+        cls.driver.implicitly_wait(1)
 
     def test_process_overview(self):
         self.wait_for_page_load()
@@ -1731,6 +1730,7 @@ class FrontendOverviewProcessListTest(FrontendTestsBase):
             "Modal did not open!"
         )
 
+        print(EC.visibility_of_element_located((By.ID, "full-process-list")).locator)
         process_list = self.driver.find_element_by_id("full-process-list")
         process_details = process_list.find_elements_by_class_name("gpu-process-details")
 
