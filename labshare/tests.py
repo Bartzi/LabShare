@@ -27,6 +27,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 from selenium import webdriver
 from selenium.common.exceptions import NoSuchElementException
+from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.wait import WebDriverWait
@@ -1601,8 +1602,11 @@ class FrontendTestsBase(ChannelsLiveServerTestCase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
+        chrome_options = Options()
+        for option in ["headless", "disable-gpu", "no-sandbox", "disable-dev-shm-usage"]:
+            chrome_options.add_argument(option)
         try:
-            cls.driver = webdriver.Chrome()
+            cls.driver = webdriver.Chrome(options=chrome_options)
         except:
             super().tearDownClass()
             raise
@@ -1658,6 +1662,12 @@ class FrontendTestsBase(ChannelsLiveServerTestCase):
             lambda _: all(EC.presence_of_element_located((By.ID, gpu.uuid)) for gpu in GPU.objects.all()),
             "Gpus did not show up on page, Websocket Connection not okay?"
         )
+        self.open_gpu_dropdowns()
+
+    def open_gpu_dropdowns(self):
+        gpu_buttons = self.driver.find_elements_by_class_name('device-heading-btn')
+        for button in gpu_buttons:
+            button.click()
 
     def open_new_window(self):
         self.driver.execute_script('window.open("about:blank", "_blank");')
@@ -1674,78 +1684,6 @@ class FrontendTestsBase(ChannelsLiveServerTestCase):
         self.driver.switch_to_window(self.driver.window_handles[window_id])
 
 
-@skipIf("TRAVIS" in os.environ and os.environ["TRAVIS"] == "true", "Skipping this test on Travis CI.")
-class FrontendOverviewDataTest(FrontendTestsBase):
-
-    def test_overview_gpu_data_correct(self):
-        self.wait_for_page_load()
-        time.sleep(0.5)
-
-        for gpu in GPU.objects.all():
-            # 1. check that the elements look correct
-            element = self.driver.find_element_by_id(gpu.uuid)
-            memory_element = element.find_element_by_class_name("gpu-memory").text
-            self.assertEqual(memory_element, gpu.memory_usage())
-            current_reservation_element = element.find_element_by_class_name("gpu-current-reservation").text
-            current_user = gpu.get_current_user()
-            self.assertEqual(current_reservation_element, getattr(current_user, 'username', ''))
-            next_reservation_element = element.find_element_by_class_name("gpu-next-reservation").text
-            next_users = gpu.get_next_users()
-            self.assertEqual(next_reservation_element, next_users[0].username if len(next_users) > 0 else '')
-
-            # 2. check that the buttons are rendered correctly
-            buttons = element.find_element_by_class_name("gpu-actions")
-            hidden_elements = buttons.find_elements_by_class_name("d-none")
-            self.assertEqual(len(hidden_elements), 3)
-            current_reservation = gpu.get_current_reservation()
-            next_reservations = list(gpu.get_next_reservations())
-            for reservation in Reservation.objects.filter(gpu=gpu, user=self.staff_user):
-                if reservation == current_reservation and not reservation.is_extension_possible():
-                    self.assertNotIn(
-                        "d-none",
-                        buttons.find_element_by_class_name("gpu-done-button").get_attribute("class")
-                    )
-                else:
-                    self.assertIn(
-                        "d-none",
-                        buttons.find_element_by_class_name("gpu-done-button").get_attribute("class")
-                    )
-
-                if reservation == current_reservation and reservation.is_extension_possible():
-                    self.assertNotIn(
-                        "d-none",
-                        buttons.find_element_by_class_name("gpu-extend-button-group").get_attribute("class")
-                    )
-                else:
-                    self.assertIn(
-                        "d-none",
-                        buttons.find_element_by_class_name("gpu-extend-button-group").get_attribute("class")
-                    )
-
-                if reservation in next_reservations:
-                    self.assertNotIn(
-                        "d-none",
-                        buttons.find_element_by_class_name("gpu-cancel-button").get_attribute("class")
-                    )
-                else:
-                    self.assertIn(
-                        "d-none",
-                        buttons.find_element_by_class_name("gpu-cancel-button").get_attribute("class")
-                    )
-
-                if reservation != current_reservation and reservation not in next_reservations:
-                    self.assertNotIn(
-                        "d-none",
-                        buttons.find_element_by_class_name("gpu-reserve-button").get_attribute("class")
-                    )
-                else:
-                    self.assertIn(
-                        "d-none",
-                        buttons.find_element_by_class_name("gpu-reserve-button").get_attribute("class")
-                    )
-
-
-@skipIf("TRAVIS" in os.environ and os.environ["TRAVIS"] == "true", "Skipping this test on Travis CI.")
 class FrontendOverviewNonSuperuserTest(FrontendTestsBase):
 
     def setUp(self):
@@ -1758,165 +1696,20 @@ class FrontendOverviewNonSuperuserTest(FrontendTestsBase):
             "Gpus did not show up on page, Websocket Connection not okay?"
         )
 
+        for gpu in GPU.objects.filter(device=self.device_1):
+            self.driver.find_element_by_id(gpu.uuid)
+
         for gpu in GPU.objects.filter(device=self.device_2):
             self.assertRaises(NoSuchElementException, self.driver.find_element_by_id, gpu.uuid)
 
 
-@skipIf("TRAVIS" in os.environ and os.environ["TRAVIS"] == "true", "Skipping this test on Travis CI.")
-class FrontendOverviewDoneButtonTest(FrontendTestsBase):
-
-    def test_overview_done_button(self):
-        self.wait_for_page_load()
-
-        num_reservations_for_user = Reservation.objects.filter(user=self.staff_user).count()
-        gpu = self.driver.find_element_by_id(self.device_1.gpus.first().uuid)
-        done_button = gpu.find_element_by_class_name("gpu-done-button")
-        self.assertNotIn("d-none", done_button.get_attribute("class"))
-        done_button.click()
-
-        self.wait_for_page_load()
-        self.assertEqual(Reservation.objects.filter(user=self.staff_user).count(), num_reservations_for_user - 1)
-
-        gpu = self.driver.find_element_by_id(self.device_1.gpus.first().uuid)
-        reserve_button = gpu.find_element_by_class_name("gpu-reserve-button")
-        self.assertNotIn("d-none", reserve_button.get_attribute("class"))
-
-
-@skipIf("TRAVIS" in os.environ and os.environ["TRAVIS"] == "true", "Skipping this test on Travis CI.")
-class FrontendOverviewExtendButtonTest(FrontendTestsBase):
-
-    def test_extend_button(self):
-        self.wait_for_page_load()
-
-        gpu = self.driver.find_element_by_id(self.device_1.gpus.last().uuid)
-        extend_button_group = gpu.find_element_by_class_name("gpu-extend-button-group")
-        self.assertNotIn("d-none", extend_button_group.get_attribute("class"))
-        extend_button = extend_button_group.find_element_by_class_name("gpu-extend-button")
-        extend_button.click()
-
-        time.sleep(0.5)
-
-        self.wait_for_page_load()
-        reservation = Reservation.objects.filter(gpu=self.device_1.gpus.last()).first()
-        self.assertGreater(abs(utc_now() - reservation.usage_expires),
-                           Reservation.usage_period() - timedelta(minutes=1))
-
-        gpu = self.driver.find_element_by_id(self.device_1.gpus.last().uuid)
-        extend_button_group = gpu.find_element_by_class_name("gpu-extend-button-group")
-        self.assertIn("d-none", extend_button_group.get_attribute("class"))
-
-        done_button = gpu.find_element_by_class_name("gpu-done-button")
-        self.assertNotIn("d-none", done_button.get_attribute("class"))
-
-
-@skipIf("TRAVIS" in os.environ and os.environ["TRAVIS"] == "true", "Skipping this test on Travis CI.")
-class FrontendOverviewDropdownButtonTest(FrontendTestsBase):
-
-    def test_dropdown_done_button(self):
-        self.wait_for_page_load()
-
-        self.driver.implicitly_wait(1)
-
-        num_reservations_for_user = Reservation.objects.filter(user=self.staff_user).count()
-        gpu = self.driver.find_element_by_id(self.device_1.gpus.last().uuid)
-
-        extend_button_group = gpu.find_element_by_class_name("gpu-extend-button-group")
-        self.assertNotIn("d-none", extend_button_group.get_attribute("class"))
-
-        dropdown_toggle_button = extend_button_group.find_element_by_class_name("dropdown-toggle")
-        dropdown_toggle_button.click()
-
-        time.sleep(0.5)
-
-        done_entry = extend_button_group.find_element_by_class_name("dropdown-item")
-        done_entry.click()
-
-        self.wait_for_page_load()
-        time.sleep(0.5)
-        self.assertEqual(Reservation.objects.filter(user=self.staff_user).count(), num_reservations_for_user - 1)
-
-        gpu = self.driver.find_element_by_id(self.device_1.gpus.last().uuid)
-        reserve_button = gpu.find_element_by_class_name("gpu-reserve-button")
-        self.assertNotIn("d-none", reserve_button.get_attribute("class"))
-
-
-@skipIf("TRAVIS" in os.environ and os.environ["TRAVIS"] == "true", "Skipping this test on Travis CI.")
-class FrontendOverviewCancelButtonTest(FrontendTestsBase):
-
-    def test_overview_cancel_button(self):
-        self.wait_for_page_load()
-
-        num_reservations_for_user = Reservation.objects.filter(user=self.staff_user).count()
-        gpu = self.driver.find_element_by_id(list(self.device_1.gpus.all())[1].uuid)
-        cancel_button = gpu.find_element_by_class_name("gpu-cancel-button")
-        self.assertNotIn("d-none", cancel_button.get_attribute("class"))
-        cancel_button.click()
-
-        self.wait_for_page_load()
-        time.sleep(0.5)
-        self.assertEqual(Reservation.objects.filter(user=self.staff_user).count(), num_reservations_for_user - 1)
-
-
-@skipIf("TRAVIS" in os.environ and os.environ["TRAVIS"] == "true", "Skipping this test on Travis CI.")
-class FrontendOverviewReserveButtonTest(FrontendTestsBase):
-
-    def test_overview_cancel_button(self):
-        self.wait_for_page_load()
-
-        num_reservations_for_user = Reservation.objects.filter(user=self.staff_user).count()
-        gpu = self.driver.find_element_by_id(list(self.device_1.gpus.all())[2].uuid)
-        reserve_button = gpu.find_element_by_class_name("gpu-reserve-button")
-        self.assertNotIn("d-none", reserve_button.get_attribute("class"))
-        reserve_button.click()
-
-        self.wait_for_page_load()
-        time.sleep(0.5)
-        self.assertEqual(Reservation.objects.filter(user=self.staff_user).count(), num_reservations_for_user + 1)
-
-
-@skipIf("TRAVIS" in os.environ and os.environ["TRAVIS"] == "true", "Skipping this test on Travis CI.")
-class FrontendOverviewReserveSyncTest(FrontendTestsBase):
-
-    @classmethod
-    def setUpClass(cls):
-        super().setUpClass()
-        cls.driver.implicitly_wait(0.5)
-
-    def test_overview_button_sync(self):
-        self.wait_for_page_load()
-        try:
-            self.open_new_window()
-            self.driver.get(self.live_server_url + reverse('index'))
-            self.wait_for_page_load()
-            self.switch_to_window(0)
-
-            # click the reserve button
-            gpu = self.driver.find_element_by_id(list(self.device_1.gpus.all())[2].uuid)
-            gpu.find_element_by_class_name("gpu-reserve-button").click()
-            self.wait_for_page_load()
-
-            # check that reservation appeared in new window
-            self.switch_to_window(1)
-            self.wait_for_page_load()
-            gpu = self.driver.find_element_by_id(list(self.device_1.gpus.all())[2].uuid)
-
-            time.sleep(0.5)
-
-            reserve_button = gpu.find_element_by_class_name("gpu-reserve-button")
-            self.assertIn("d-none", reserve_button.get_attribute("class"))
-            done_button = gpu.find_element_by_class_name("gpu-done-button")
-            self.assertNotIn("d-none", done_button.get_attribute("class"))
-        finally:
-            self.close_all_new_windows()
-
-
-@skipIf("TRAVIS" in os.environ and os.environ["TRAVIS"] == "true", "Skipping this test on Travis CI.")
+@skipIf("GITHUB_ACTIONS" in os.environ and os.environ["GITHUB_ACTIONS"] == "true", "Skipping this test on Github Actions.")
 class FrontendOverviewProcessListTest(FrontendTestsBase):
 
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.driver.implicitly_wait(0.5)
+        cls.driver.implicitly_wait(1)
 
     def test_process_overview(self):
         self.wait_for_page_load()
@@ -1937,6 +1730,7 @@ class FrontendOverviewProcessListTest(FrontendTestsBase):
             "Modal did not open!"
         )
 
+        print(EC.visibility_of_element_located((By.ID, "full-process-list")).locator)
         process_list = self.driver.find_element_by_id("full-process-list")
         process_details = process_list.find_elements_by_class_name("gpu-process-details")
 

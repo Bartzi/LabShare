@@ -1,0 +1,56 @@
+name: run-tests
+on:
+  push:
+    branches:
+      - '*'
+  pull_request:
+    branches:
+      - master
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.7', '3.8', '3.9']
+    name: Labshare on Python ${{ matrix.python-version }}
+    steps:
+      - name: Check out Repo
+        uses: actions/checkout@v2
+      - name: install ldap requirements
+        run: sudo apt-get install libsasl2-dev python-dev libldap2-dev libssl-dev
+      - name: add redis
+        uses: zhulik/redis-action@1.1.0
+      - name: install chromedriver
+        uses: nanasess/setup-chromedriver@master
+      - name: setup chromedriver
+        run: |
+          export DISPLAY=:99
+          chromedriver &
+      - name: Setup Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+          architecture: x64
+      - name: install requirements
+        run: pip install -r requirements.txt
+      - name: setup database
+        run: python manage.py migrate
+      - name: run tests
+        run: coverage run manage.py test
+      - name: Coveralls
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#          COVERALLS_PARALLEL: true
+          COVERALLS_FLAG_NAME: ${{ matrix.test-name }}
+        run: coveralls
+#  coveralls:
+#    name: Tell coveralls we are finished
+#    needs: tests
+#    runs-on: ubuntu-latest
+#    steps:
+#      - name: install coveralls
+#        run: pip3 install --upgrade coveralls
+#      - name: finish on Coveralls
+#        run: coveralls --finish
+#        env:
+#          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
