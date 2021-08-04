@@ -42,7 +42,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           COVERALLS_PARALLEL: true
           COVERALLS_FLAG_NAME: ${{ matrix.test-name }}
-        run: coveralls --service=github
+        run: coveralls
   coveralls:
     name: Tell coveralls we are finished
     needs: tests
@@ -51,6 +51,6 @@ jobs:
       - name: Finished
         run: |
           pip3 install --upgrade coveralls
-          coveralls --service=github --finish debug
+          coveralls --finish
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
