@@ -38,11 +38,11 @@ jobs:
       - name: run tests
         run: coverage run manage.py test
       - name: Coveralls
-        run: coveralls --service=github debug
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           COVERALLS_PARALLEL: true
           COVERALLS_FLAG_NAME: ${{ matrix.test-name }}
+        run: coveralls --service=github
   coveralls:
     name: Tell coveralls we are finished
     needs: tests
