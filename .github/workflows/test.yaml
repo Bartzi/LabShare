@@ -48,9 +48,9 @@ jobs:
     needs: tests
     runs-on: ubuntu-latest
     steps:
-      - name: Finished
-        run: |
-          pip3 install --upgrade coveralls
-          coveralls --finish
+      - name: install coveralls
+        run: pip3 install --upgrade coveralls
+      - name: finish on Coveralls
+        run: coveralls --finish
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
