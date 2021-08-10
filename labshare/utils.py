@@ -1,18 +1,14 @@
-import sys
+import json
 
 import channels.layers
-import json
-import urllib.request
 from asgiref.sync import async_to_sync
 from django.conf import settings
-
-from django.core.mail import send_mail, EmailMessage
+from django.core.mail import send_mail
 from django.http import HttpResponse
 from django.shortcuts import render
 from django.template import loader
-from urllib.error import URLError
 
-from .models import Device, GPU, GPUProcess, Reservation
+from .models import Device
 
 
 def get_devices():
@@ -33,32 +29,6 @@ def send_reservation_mail_for(request, gpu):
             settings.DEFAULT_FROM_EMAIL,
             email_addresses,
         )
-
-
-def delete_reservation(reservation):
-    gpu = reservation.gpu
-    reservation.delete()
-
-    # get the user of the reservation that is now current and send him an email
-    current_reservation = gpu.current_reservation()
-    if current_reservation is not None:
-        current_reservation.start_usage()
-        # clear all reservations made for this user if he only reserved the next available spot on this device
-        if current_reservation.user_reserved_next_available_spot:
-            device = current_reservation.gpu.device
-            reservations_to_delete = []
-            for gpu in device.gpus.all():
-                for reservation in gpu.reservations.all():
-                    if reservation == current_reservation:
-                        continue
-                    elif reservation.user == current_reservation.user and reservation.user_reserved_next_available_spot:
-                        reservations_to_delete.append(reservation)
-
-            for reservation in reservations_to_delete:
-                reservation.delete()
-
-        send_gpu_done_mail(gpu, current_reservation)
-    publish_device_state(gpu.device)
 
 
 def send_gpu_done_mail(gpu, reservation):
@@ -94,52 +64,17 @@ def login_required_ajax(function=None, redirect_field_name=None):
         return _decorator(function)
 
 
-def determine_failed_gpus():
-    # gather all GPUs that have not been updated in a while and notify users + admin of possible problems
-    failed_gpus = filter(lambda gpu: gpu.last_update_too_long_ago() and not gpu.marked_as_failed, GPU.objects.all())
-    for failed_gpu in failed_gpus:
-        # 1. gather all email addresses
-        admin_emails = [data[1] for data in settings.ADMINS]
-
-        current_user = failed_gpu.get_current_user()
-        if current_user is not None:
-            current_user_emails = [address.email for address in current_user.email_addresses.all()]
-            current_user_emails.append(current_user.email)
-        else:
-            current_user_emails = admin_emails
-
-        # 2. prepare and send email
-        email_template = loader.get_template('mails/gpu_problem.txt')
-        email = EmailMessage(
-            subject="[Labshare] Problem with GPU",
-            body=email_template.render({'user': current_user, "gpu": failed_gpu}),
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            to=current_user_emails,
-            cc=admin_emails,
-        )
-        email.send()
-
-        # 3. mark gpu as failed and inhibit further emails
-        failed_gpu.marked_as_failed = True
-        failed_gpu.save(update_fields=["marked_as_failed"])
-
-
-def publish_device_state(device, channel_name=None):
+def publish_device_state(device_data, channel_name=None):
     channel_layer = channels.layers.get_channel_layer()
-    name = device.name
-    device_data = device.serialize()
+    name = device_data['name']
+    if 'gpus' not in device_data:
+        device_data['gpus'] = []
+
     if channel_name is None:
         send_function = async_to_sync(channel_layer.group_send)
     else:
         send_function = async_to_sync(channel_layer.send)
     send_function(channel_name if channel_name else name, {'type': 'update_info', 'message': json.dumps(device_data)})
-
-
-def publish_gpu_states():
-    devices = Device.objects.all()
-
-    for device in devices:
-        publish_device_state(device)
 
 
 def send_extension_reminder(reservation):
@@ -154,27 +89,3 @@ def send_extension_reminder(reservation):
     )
     reservation.set_reminder_sent()
 
-
-def expire_reservation(reservation):
-    delete_reservation(reservation)
-    email_addresses = [address.email for address in reservation.user.email_addresses.all()]
-    email_addresses.append(reservation.user.email)
-
-    send_mail(
-        "GPU reservation expired",
-        loader.get_template("mails/usage_expired.txt").render({'reservation': reservation, "gpu": reservation.gpu}),
-        settings.DEFAULT_FROM_EMAIL,
-        email_addresses,
-    )
-
-
-def check_reservations():
-    all_reservations = Reservation.objects.all()
-    for reservation in all_reservations:
-        if reservation.usage_started is None:
-            continue
-        if reservation.is_usage_expired():
-            expire_reservation(reservation)
-            continue
-        if reservation.needs_reminder():
-            send_extension_reminder(reservation)

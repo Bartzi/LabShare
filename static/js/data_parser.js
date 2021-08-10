@@ -1,16 +1,36 @@
 const deviceData = {};
 const webSocketMethod = window.location.protocol === "https:" ? "wss" : "ws";
 
+function createNewGPURow(gpuData, deviceName) {
+    console.log(`Create new row for GPU: ${gpuData.uuid}`);
+    const gpuTemplate = $('.gpu-row-template');
+    const gpuRow = gpuTemplate.clone();
+    gpuRow.removeClass("gpu-row-template");
+    gpuRow.addClass("gpu-row");
+    gpuRow.attr("id", gpuData.uuid);
+    const deviceTable = $(`#${deviceName}-gpu-table`);
+    const tableBody = deviceTable.find("tbody");
+    gpuRow.appendTo(tableBody);
+
+    const processButton = gpuRow.find('.gpu-processes').find('.gpu-process-show');
+    processButton.attr('data-device', deviceName);
+    processButton.attr('data-gpu-uuid', gpuData.uuid);
+    setupModals();
+    return gpuRow;
+}
+
 function updateGPUData(data, currentUser) {
     let any_gpu_in_use = false;
     let any_gpu_failed = false;
     for (let gpu of data.gpus) {
-        const gpuRow = $('#' + gpu.uuid);
-        gpuRow.find('.gpu-memory').html(gpu.memory);
+        let gpuRow = $('#' + gpu.uuid);
+        if (gpuRow.length === 0) {
+            gpuRow = createNewGPURow(gpu, data.name);
+        }
+        gpuRow.find('.gpu-model-name').html(gpu.model_name);
+        gpuRow.find('.gpu-memory').html(`${gpu.used_memory} / ${gpu.total_memory}`);
         gpuRow.find('.gpu-utilization').html(gpu.utilization);
-        gpuRow.find('.gpu-last-update').timeago('init').timeago('update', gpu.last_update);
-        gpuRow.find('.gpu-current-reservation').html(gpu.current_user);
-        gpuRow.find('.gpu-next-reservation').html(gpu.next_users.length > 0 ? gpu.next_users[0] : '');
+        gpuRow.find('.gpu-last-update').timeago('init').timeago('update', new Date());
 
         const numGPUProcesses = gpu.processes.length;
         const processButton = gpuRow.find('.gpu-processes').find('.gpu-process-show');
@@ -84,25 +104,45 @@ function setupModals() {
     });
 }
 
+
+function setBorderColor(element, borderColor) {
+    for (const colorName of ["success", "danger", "warning"]) {
+        const className = `border-${colorName}`
+        if (element.hasClass(className)) {
+            element.removeClass(className);
+        }
+    }
+    element.addClass(`border-${borderColor}`);
+}
+
 function setupWebsockets(deviceNames, currentUser) {
-    for (const device of deviceNames) {
-         const socket = new ReconnectingWebSocket(webSocketMethod + "://" + window.location.host + '/ws/device/' + device + '/');
-         socket.device_name = device;
-         socket.addEventListener('open', function (event) {
-             console.log("Opening Socket " + socket.device_name);
-         });
-         socket.addEventListener('close', function (event) {
-             console.log("Closing socket " + socket.device_name);
-             delete deviceData[socket.device_name];
-         });
-         socket.addEventListener('error', function (event) {
-             console.log("Error while opening Websocket" + event);
-         });
-         socket.addEventListener('message', function (event) {
-             const data = JSON.parse(event.data);
-             deviceData[socket.device_name] = data;
-             updateGPUData(data, currentUser);
-         });
+    for (const deviceName of deviceNames) {
+        const deviceTable = $(`#${deviceName}-card`);
+        const socket = new ReconnectingWebSocket(webSocketMethod + "://" + window.location.host + '/ws/device/' + deviceName + '/');
+        setBorderColor(deviceTable, "warning");
+        socket.device_name = deviceName;
+        socket.addEventListener('open', function (event) {
+            setBorderColor(deviceTable, "warning");
+            console.log("Opening Socket " + socket.device_name);
+        });
+        socket.addEventListener('close', function (event) {
+            setBorderColor(deviceTable, "danger");
+            console.log("Closing socket " + socket.device_name);
+            delete deviceData[socket.device_name];
+        });
+        socket.addEventListener('error', function (event) {
+            setBorderColor(deviceTable, "danger");
+            console.log("Error while opening Websocket" + event);
+        });
+        socket.addEventListener('message', function (event) {
+            if (!deviceTable.hasClass("border-success")) {
+                setBorderColor(deviceTable, "success");
+            }
+            console.log(`Got Message: ${event.data}`);
+            const data = JSON.parse(event.data);
+            deviceData[data.name] = data;
+            updateGPUData(data, currentUser);
+        });
      }
 }
 

@@ -17,7 +17,7 @@ class GPUInfoUpdater(WebsocketConsumer):
                 self.channel_name,
             )
 
-            publish_device_state(device, self.channel_name)
+            publish_device_state(device.serialize(), self.channel_name)
 
             self.accept()
         else:

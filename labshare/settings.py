@@ -34,6 +34,14 @@ AUTH_LDAP_GROUP_MAP = {
 }
 AUTH_LDAP_DEFAULT_GROUP_NAME = ""
 
+# CHANNEL_LAYERS = {
+#     "default": {
+#         "BACKEND": "channels_rabbitmq.core.RabbitmqChannelLayer",
+#         "CONFIG": {
+#             "host": "amqp://guest:guest@127.0.0.1",
+#         },
+#     },
+# }
 
 CHANNEL_LAYERS = {
     'default': {
@@ -45,7 +53,6 @@ CHANNEL_LAYERS = {
 }
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-
 
 # Database
 # https://docs.djangoproject.com/en/1.8/ref/settings/#databases

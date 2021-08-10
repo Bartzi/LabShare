@@ -1,0 +1,15 @@
+{% load icon %}
+<table>
+    <tbody>
+        <tr class="gpu-row-template alert">
+            <td class="text-truncate align-middle gpu-model-name">--</td>
+            <td class="text-truncate align-middle gpu-memory">--</td>
+            <td class="text-truncate align-middle gpu-utilization">--</td>
+            <td class="text-truncate align-middle gpu-processes">
+                <button class="gpu-process-show btn btn-block btn-sm btn-info" disabled>0 Processes</button>
+            </td>
+            <td class="text-truncate align-middle gpu-last-update">--</td>
+            <td class="text-truncate align-middle gpu-reserved">{% icon media-record %}</td>
+        </tr>
+    </tbody>
+</table>
