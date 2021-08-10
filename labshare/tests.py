@@ -836,6 +836,7 @@ class FrontendTestsBase(ChannelsLiveServerTestCase):
         }
 
 
+@skipIf("GITHUB_ACTIONS" in os.environ and os.environ["GITHUB_ACTIONS"] == "true", "Skipping this test on Github Actions.")
 class FrontendOverviewNonSuperuserTest(FrontendTestsBase):
 
     def setUp(self):
@@ -846,6 +847,7 @@ class FrontendOverviewNonSuperuserTest(FrontendTestsBase):
         self.assertRaises(NoSuchElementException, self.driver.find_element_by_id, f"{self.device_2.name}-gpu-table")
 
 
+@skipIf("GITHUB_ACTIONS" in os.environ and os.environ["GITHUB_ACTIONS"] == "true", "Skipping this test on Github Actions.")
 class FrontendOverviewGPUViewTest(FrontendTestsBase):
 
     def test_overview_gpu_data_correctly_appears(self):
@@ -864,6 +866,7 @@ class FrontendOverviewGPUViewTest(FrontendTestsBase):
             self.assertEqual(len(device_data['gpus']), len(gpu_rows))
 
 
+@skipIf("GITHUB_ACTIONS" in os.environ and os.environ["GITHUB_ACTIONS"] == "true", "Skipping this test on Github Actions.")
 class FrontendOverviewGPUUpdateTest(FrontendTestsBase):
 
     def test_overview_gpu_data_changes(self):
