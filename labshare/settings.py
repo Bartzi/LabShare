@@ -60,7 +60,6 @@ CHANNEL_LAYERS = {
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-
 # Database
 # https://docs.djangoproject.com/en/1.8/ref/settings/#databases
 
@@ -87,9 +86,9 @@ EMAIL_PORT = "25"
 HIJACK_USE_BOOTSTRAP = True
 
 INSTALLED_APPS = (
-    'django.contrib.contenttypes',
     'django.contrib.admin',
     'django.contrib.auth',
+    'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
