@@ -6,16 +6,13 @@ from django.contrib.auth.models import User
 from django.utils.translation import ugettext_lazy as _
 from guardian.admin import GuardedModelAdmin
 
-from .models import Device, GPU, Reservation, EmailAddress, GPUProcess
+from .models import Device, EmailAddress
 
 
 class DeviceAdmin(GuardedModelAdmin):
     pass
 
 admin.site.register(Device, DeviceAdmin)
-admin.site.register(GPU)
-admin.site.register(GPUProcess)
-admin.site.register(Reservation)
 admin.site.register(EmailAddress)
 
 

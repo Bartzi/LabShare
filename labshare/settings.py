@@ -34,6 +34,14 @@ AUTH_LDAP_GROUP_MAP = {
 }
 AUTH_LDAP_DEFAULT_GROUP_NAME = ""
 
+# CHANNEL_LAYERS = {
+#     "default": {
+#         "BACKEND": "channels_rabbitmq.core.RabbitmqChannelLayer",
+#         "CONFIG": {
+#             "host": "amqp://guest:guest@127.0.0.1",
+#         },
+#     },
+# }
 
 CHANNEL_LAYERS = {
     'default': {
@@ -43,6 +51,12 @@ CHANNEL_LAYERS = {
         },
     },
 }
+
+# CHANNEL_LAYERS = {
+#     "default": {
+#         "BACKEND": "channels.layers.InMemoryChannelLayer"
+#     }
+# }
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -73,9 +87,9 @@ EMAIL_PORT = "25"
 HIJACK_USE_BOOTSTRAP = True
 
 INSTALLED_APPS = (
+    'django.contrib.contenttypes',
     'django.contrib.admin',
     'django.contrib.auth',
-    'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',

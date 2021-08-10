@@ -26,7 +26,7 @@
 {% block content %}
     <div class="col-lg-12" id="gpu-overview">
         {% for device in devices %}
-            <div class="card m-3">
+            <div class="card m-3 border border-danger" id="{{ device.name }}-card">
                 <div class="card-header p-0" id="{{ device.name }}_heading">
                     <button class="btn btn-block device-heading-btn p-3" type="button" data-toggle="collapse"
                             data-target="#{{ device.name }}_collapse" aria-expanded="true"
@@ -36,7 +36,7 @@
                 </div>
                 <div id="{{ device.name }}_collapse" class="collapse" aria-labelledby="{{ device.name }}_heading">
                     <div class="card-body">
-                        <table class="table table-sm" id="overview-table">
+                        <table class="table table-sm" id="{{ device.name }}-gpu-table">
                             <thead>
                             <tr>
                                 <th class="w-20">GPU</th>
@@ -44,20 +44,10 @@
                                 <th class="w-20">Utilization</th>
                                 <th class="w-20">Processes</th>
                                 <th class="w-20">Last Update</th>
+                                <th class="w-20"></th>
                             </tr>
                             </thead>
                             <tbody style="background-color: #fff;">
-                            {% for gpu in device.gpus.all %}
-                                <tr id="{{ gpu.uuid }}" class="alert">
-                                    <td class="text-truncate align-middle">{{ gpu.model_name }}</td>
-                                    <td class="text-truncate align-middle gpu-memory">- MiB / - MiB</td>
-                                    <td class="text-truncate align-middle gpu-utilization">0 %</td>
-                                    <td class="text-truncate align-middle gpu-processes">
-                                        <button class="gpu-process-show btn btn-block btn-sm btn-info" disabled data-device="{{ device.name }}" data-gpu-uuid="{{ gpu.uuid }}">0 Processes</button>
-                                    </td>
-                                    <td class="text-truncate align-middle gpu-last-update">--</td>
-                                </tr>
-                            {% endfor %}
                             </tbody>
                         </table>
                     </div>
@@ -67,6 +57,7 @@
     </div>
 
     <div id="templates" class="d-none">
+        {% include "gpu_row.html" %}
         {% include "process_list_base.html" %}
         {% include "process_list_body.html" %}
     </div>
