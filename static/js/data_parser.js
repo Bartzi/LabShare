@@ -19,6 +19,22 @@ function createNewGPURow(gpuData, deviceName) {
     return gpuRow;
 }
 
+
+function updateReservationIndicator(gpuRow, gpuIsReserved) {
+    let reservationIndicator;
+    if (gpuIsReserved) {
+        reservationIndicator = $(".gpu-in-use-template").clone();
+        reservationIndicator.removeClass("gpu-in-use-template");
+    } else {
+        reservationIndicator = $(".gpu-free-template").clone();
+        reservationIndicator.removeClass("gpu-free-template");
+    }
+    reservationIndicator.addClass("gpu-reservation-indicator");
+    const reservationRoot = gpuRow.find(".gpu-reservation");
+    reservationRoot.empty();
+    reservationIndicator.appendTo(reservationRoot);
+}
+
 function updateGPUData(data, currentUser) {
     let any_gpu_in_use = false;
     let any_gpu_failed = false;
@@ -31,6 +47,8 @@ function updateGPUData(data, currentUser) {
         gpuRow.find('.gpu-memory').html(`${gpu.used_memory} / ${gpu.total_memory}`);
         gpuRow.find('.gpu-utilization').html(gpu.utilization);
         gpuRow.find('.gpu-last-update').timeago('init').timeago('update', new Date());
+
+        updateReservationIndicator(gpuRow, gpu.reserved);
 
         const numGPUProcesses = gpu.processes.length;
         const processButton = gpuRow.find('.gpu-processes').find('.gpu-process-show');

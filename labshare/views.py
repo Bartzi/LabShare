@@ -1,9 +1,11 @@
 import json
+import logging
 
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
-from django.core.exceptions import PermissionDenied, SuspiciousOperation
+from django.core.exceptions import PermissionDenied, SuspiciousOperation, ObjectDoesNotExist
 from django.core.mail import EmailMessage
 from django.http import HttpResponseRedirect, HttpResponse, Http404
 from django.shortcuts import get_object_or_404
@@ -11,6 +13,7 @@ from django.urls import reverse
 from django.views.decorators.csrf import ensure_csrf_cookie
 from rest_framework.authentication import TokenAuthentication
 from rest_framework.decorators import api_view, authentication_classes, permission_classes
+from rest_framework.exceptions import MethodNotAllowed
 from rest_framework.permissions import IsAuthenticated
 
 from labshare.decorators import render_to
@@ -69,6 +72,30 @@ def update_gpu_info(request):
     device_data = device.serialize()
     device_data["gpus"] = gpus
     publish_device_state(device_data)
+
+    return HttpResponse()
+
+
+@api_view(['POST'])
+@authentication_classes((TokenAuthentication,))
+@permission_classes((IsAuthenticated,))
+def update_allocations(request):
+    if request.method != "POST":
+        raise MethodNotAllowed
+
+    if request.user != User.objects.get(username=settings.ALLOCATION_UPDATE_USERNAME):
+        raise PermissionDenied
+
+    data = json.loads(request.read().decode("utf-8"))
+    for device_name, allocated_gpus in data.items():
+        try:
+            device = Device.objects.get(name=device_name)
+            allocated_gpus = [int(gpu_id) for gpu_id in allocated_gpus]
+            for idx, gpu in enumerate(device.gpus.all()):
+                gpu.reserved = idx in allocated_gpus
+                gpu.save()
+        except ObjectDoesNotExist:
+            logging.error(f"Tried to update gpu allocations of non existing device: {device_name}")
 
     return HttpResponse()
 

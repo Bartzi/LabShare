@@ -6,6 +6,7 @@ from django_auth_ldap.config import LDAPSearch, GroupOfNamesType
 
 ADMINS = ()
 ALLOWED_HOSTS = []
+ALLOCATION_UPDATE_USERNAME = "allocation_update_user"
 
 ASGI_APPLICATION = "labshare.routing.application"
 
