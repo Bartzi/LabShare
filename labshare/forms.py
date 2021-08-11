@@ -1,19 +1,7 @@
 from django import forms
+from django.conf import settings
 from django.contrib.auth.models import User
 from django.forms import SelectMultiple, Select
-
-from .utils import get_devices
-
-
-class DeviceSelectForm(forms.Form):
-    device = forms.ChoiceField(choices=get_devices)
-    gpu = forms.CharField()
-    next_available_spot = forms.HiddenInput()
-
-    def __init__(self, *args, **kwargs):
-        devices = kwargs.pop('devices')
-        super(DeviceSelectForm, self).__init__(*args, **kwargs)
-        self.fields['device'].choices = [(device.name, device.name) for device in devices]
 
 
 class MessageForm(forms.Form):
@@ -29,7 +17,7 @@ class MessageForm(forms.Form):
 
 class ViewAsForm(forms.Form):
     username = forms.ModelChoiceField(
-        queryset=User.objects.all(),
+        queryset=User.objects.all().exclude(username__endswith="_user").exclude(username=settings.ALLOCATION_UPDATE_USERNAME),
         empty_label="Select a user",
         required=True,
         widget=Select(attrs={"id": "username-field"})

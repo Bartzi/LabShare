@@ -7,17 +7,15 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.core.exceptions import PermissionDenied, SuspiciousOperation, ObjectDoesNotExist
 from django.core.mail import EmailMessage
-from django.http import HttpResponseRedirect, HttpResponse, Http404
-from django.shortcuts import get_object_or_404
+from django.http import HttpResponseRedirect, HttpResponse
 from django.urls import reverse
 from django.views.decorators.csrf import ensure_csrf_cookie
 from rest_framework.authentication import TokenAuthentication
 from rest_framework.decorators import api_view, authentication_classes, permission_classes
-from rest_framework.exceptions import MethodNotAllowed
 from rest_framework.permissions import IsAuthenticated
 
 from labshare.decorators import render_to
-from labshare.utils import login_required_ajax, publish_device_state
+from labshare.utils import publish_device_state
 from .forms import MessageForm, ViewAsForm
 from .models import Device, GPU
 
@@ -34,9 +32,6 @@ def index(request):
 @authentication_classes((TokenAuthentication,))
 @permission_classes((IsAuthenticated,))
 def update_gpu_info(request):
-    if request.method != "POST":
-        raise SuspiciousOperation
-
     data = json.loads(request.read().decode("utf-8"))
     device_name = data["device_name"]
     device = Device.objects.get(name=device_name)  # Device should exist because it's authorized
@@ -80,9 +75,6 @@ def update_gpu_info(request):
 @authentication_classes((TokenAuthentication,))
 @permission_classes((IsAuthenticated,))
 def update_allocations(request):
-    if request.method != "POST":
-        raise MethodNotAllowed
-
     if request.user != User.objects.get(username=settings.ALLOCATION_UPDATE_USERNAME):
         raise PermissionDenied
 
