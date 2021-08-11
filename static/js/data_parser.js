@@ -156,7 +156,6 @@ function setupWebsockets(deviceNames, currentUser) {
             if (!deviceTable.hasClass("border-success")) {
                 setBorderColor(deviceTable, "success");
             }
-            console.log(`Got Message: ${event.data}`);
             const data = JSON.parse(event.data);
             deviceData[data.name] = data;
             updateGPUData(data, currentUser);
