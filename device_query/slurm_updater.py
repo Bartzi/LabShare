@@ -96,7 +96,7 @@ def main(args: argparse.Namespace):
 
     while True:
         try:
-            sinfo_output = subprocess.check_output(["sinfo", "-O \"Nodelist,GresUsed:60\"", "-h"]).decode("utf-8")
+            sinfo_output = subprocess.check_output(['sinfo', '-O', "NodeList,GresUsed:60", '-h']).decode("utf-8")
             node_info = parse_sinfo_output(sinfo_output)
 
             post_data = json.dumps(node_info).encode("utf-8")
