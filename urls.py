@@ -10,6 +10,7 @@ urlpatterns = [
     path('', views.index, name="index"),
     path('message', views.send_message, name="send_message"),
     path('gpu/update', views.update_gpu_info, name="update_gpu_info"),
+    path('gpu/allocations', views.update_allocations, name="update_gpu_allocations"),
 
     path('accounts/login', auth_views.LoginView.as_view(template_name='login.html')),
     path('login/', auth_views.LoginView.as_view(template_name='login.html')),
