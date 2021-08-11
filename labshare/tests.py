@@ -16,6 +16,7 @@ import requests
 from channels.layers import get_channel_layer
 from channels.testing import ChannelsLiveServerTestCase, WebsocketCommunicator
 from django import template
+from django.conf import settings
 from django.contrib.auth.models import User, Group
 from django.core import mail
 from django.test import TestCase, override_settings, Client
@@ -36,7 +37,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.wait import WebDriverWait
 
 from labshare.consumers import GPUInfoUpdater
-from labshare.models import Device, EmailAddress
+from labshare.models import Device, EmailAddress, GPU
 from labshare.routing import application
 from labshare.templatetags.icon import icon
 from labshare.utils import get_devices, publish_device_state
@@ -251,7 +252,11 @@ class TestMessages(WebTest):
         self.assertEqual(response.status_code, 200)
 
         form = response.form
-        form['recipients'] = '2'
+        for idx, _, user_name in form.fields['recipients'][0].options:
+            if user_name == self.user.username:
+                form['recipients'] = str(idx)
+                break
+
         form['subject'] = 'subject'
         form['message'] = 'message'
 
@@ -325,6 +330,7 @@ def get_bare_gpu_template():
         "in_use": "no",
         "processes": [],
         "gpu_util": "25 %",
+        "reserved": False,
     }
 
 
@@ -413,6 +419,68 @@ class UpdateGPUTests(APITestCase):
                                     request_data(self.device.name, working_gpu_data_with_one_gpu_not_in_use),
                                     format='json')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+
+class GPUAllocationTests(APITestCase):
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.device = device_recipe.make()
+        cls.gpu = baker.make(GPU, device=cls.device)
+
+    def setUp(self):
+        user = User.objects.get(username=settings.ALLOCATION_UPDATE_USERNAME)
+        self.client.force_authenticate(user=user)
+        self.url = reverse("update_gpu_allocations")
+
+    def get_gpu_allocation_data(self):
+        num_gpus = self.device.gpus.count()
+        num_allocated_gpus = random.randint(0, num_gpus)
+        return {self.device.name: [i for i in range(num_allocated_gpus)]}
+
+    def post_data(self, data=None):
+        if data is None:
+            data = self.get_gpu_allocation_data()
+
+        response = self.client.post(self.url, data, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_update_allocation_info_no_post(self):
+        response = self.client.get(self.url, self.get_gpu_allocation_data())
+        self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+
+    def test_update_allocation_wrong_user(self):
+        self.client.force_authenticate(user=self.device.user)
+        response = self.client.post(self.url, self.get_gpu_allocation_data(), format='json')
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_update_allocation_correct_device_no_allocation(self):
+        allocation_data = {self.device.name: []}
+        self.post_data(allocation_data)
+
+        self.assertEqual(GPU.objects.filter(reserved=False).count(), GPU.objects.count())
+
+    def test_update_allocation_correct_device_allocation(self):
+        allocation_data = {self.device.name: [idx for idx, _ in enumerate(self.device.gpus.all())]}
+        self.post_data(allocation_data)
+
+        self.assertEqual(GPU.objects.filter(reserved=True).count(), GPU.objects.count())
+
+    def test_update_allocation_more_devices(self):
+        allocation_data = self.get_gpu_allocation_data()
+        allocation_data['non_existing'] = [0, 1]
+
+        gpu_count = GPU.objects.count()
+        self.post_data(allocation_data)
+
+        self.assertEqual(GPU.objects.count(), gpu_count)
+        allocations_for_device = allocation_data[self.device.name]
+
+        for idx, gpu in enumerate(self.device.gpus.all()):
+            if idx in allocations_for_device:
+                self.assertTrue(gpu.reserved)
+            else:
+                self.assertFalse(gpu.reserved)
 
 
 admin_mail = "test@example.com"
@@ -605,8 +673,8 @@ class LDAPTests(WebTest):
         return side_effect
 
     def test_ldap_new_user_created_on_login(self):
-        # Each device creates a user in addition to the AnonymousUser
-        self.assertEqual(User.objects.count(), Device.objects.count() + 1)
+        # Each device creates a user in addition to the AnonymousUser and the Slurm Update User
+        self.assertEqual(User.objects.count(), Device.objects.count() + 2)
         self.assertEqual(Group.objects.get(name=ldap_student_name).user_set.count(), 0)
         with mock.patch('django_auth_ldap.config.LDAPSearch.execute') as mocked_execute:
             mocked_execute.side_effect = self.get_ldap_user_result()
@@ -616,11 +684,11 @@ class LDAPTests(WebTest):
                 client = Client()
                 client.login(username=self.username, password=self.password)
 
-                self.assertEqual(User.objects.count(), Device.objects.count() + 2)
+                self.assertEqual(User.objects.count(), Device.objects.count() + 3)
                 self.assertEqual(Group.objects.get(name=ldap_student_name).user_set.count(), 1)
 
     def test_ldap_new_user_created_with_group(self):
-        self.assertEqual(User.objects.count(), Device.objects.count() + 1)
+        self.assertEqual(User.objects.count(), Device.objects.count() + 2)
         self.assertEqual(Group.objects.get(name=ldap_staff_name).user_set.count(), 0)
         self.assertEqual(Group.objects.get(name=ldap_student_name).user_set.count(), 0)
         with mock.patch('django_auth_ldap.config.LDAPSearch.execute') as mocked_execute:
@@ -631,7 +699,7 @@ class LDAPTests(WebTest):
                 client = Client()
                 client.login(username=self.username, password=self.password)
 
-                self.assertEqual(User.objects.count(), Device.objects.count() + 2)
+                self.assertEqual(User.objects.count(), Device.objects.count() + 3)
                 self.assertEqual(Group.objects.get(name=ldap_staff_name).user_set.count(), 1)
                 self.assertEqual(Group.objects.get(name=ldap_student_name).user_set.count(), 0)
 
@@ -715,6 +783,19 @@ class LDAPTests(WebTest):
                 self.assertEqual(Group.objects.get(name=ldap_staff_name).user_set.count(), 1)
 
 
+class ClassNotPresentCondition:
+
+    def __init__(self, css_class):
+        self.css_class = css_class
+
+    def __call__(self, driver):
+        try:
+            driver.find_element_by_class_name(self.css_class)
+            return False
+        except NoSuchElementException:
+            return True
+
+
 class FrontendTestsBase(ChannelsLiveServerTestCase):
     serve_static = True
 
@@ -787,17 +868,21 @@ class FrontendTestsBase(ChannelsLiveServerTestCase):
                 publish_device_state(data)
 
     def wait_for_page_load(self, gpu_data=None, open_dropdowns=True):
-        WebDriverWait(self.driver, 2).until(EC.presence_of_element_located((By.CLASS_NAME, "border-success")))
+        self.wait_for_websocket_connection()
         self.publish_device_states(gpu_data)
         WebDriverWait(self.driver, 2).until(EC.presence_of_element_located((By.CLASS_NAME, "gpu-row")))
         if open_dropdowns:
             self.open_device_dropdowns()
             time.sleep(1)
 
+    def wait_for_websocket_connection(self):
+        WebDriverWait(self.driver, 2).until(EC.presence_of_element_located((By.CLASS_NAME, "border-success")))
+
     def open_device_dropdowns(self):
         gpu_buttons = self.driver.find_elements_by_class_name('device-heading-btn')
         for button in gpu_buttons:
             button.click()
+        WebDriverWait(self.driver, 2).until(ClassNotPresentCondition("collapsing"))
 
     def open_new_window(self):
         self.driver.execute_script('window.open("about:blank", "_blank");')
@@ -948,3 +1033,48 @@ class FrontendOverviewProcessListTest(FrontendTestsBase):
 
             memory_text = process_detail.find_elements_by_class_name("list-group-item")[2].text
             self.assertIn(process['memory_usage'], memory_text)
+
+
+class SlurmInfoFrontendTests(FrontendTestsBase):
+
+    def prepare_gpus(self):
+        self.wait_for_websocket_connection()
+        self.open_device_dropdowns()
+        # until now, we should not see the reservation indicator
+        self.assertEqual(len(self.driver.find_elements_by_class_name("gpu-reservation-indicator")), 0)
+
+        device_1_data = self.build_gpus_for_device(self.device_1, 1, 1, 0)
+        device_2_data = self.build_gpus_for_device(self.device_2, 2, 2, 3)
+
+        self.wait_for_page_load([device_1_data, device_2_data], open_dropdowns=False)
+        return device_1_data, device_2_data
+
+
+@skipIf("GITHUB_ACTIONS" in os.environ and os.environ["GITHUB_ACTIONS"] == "true", "Skipping this test on Github Actions.")
+class SlurmUpdateTestNoReservation(SlurmInfoFrontendTests):
+
+    def test_slurm_no_gpu_reserved(self):
+        self.prepare_gpus()
+
+        reservation_indicators = self.driver.find_elements_by_class_name("gpu-reservation-indicator")
+        self.assertEqual(len(reservation_indicators), 3)
+        for reservation_indicator in reservation_indicators:
+            self.assertEqual("free", reservation_indicator.text)
+
+
+@skipIf("GITHUB_ACTIONS" in os.environ and os.environ["GITHUB_ACTIONS"] == "true", "Skipping this test on Github Actions.")
+class SlurmUpdateTestAllReservation(SlurmInfoFrontendTests):
+
+    def test_slurm_all_gpus_reserved(self):
+        device_data = self.prepare_gpus()
+
+        for device in device_data:
+            for gpu in device['gpus']:
+                gpu["reserved"] = True
+
+        self.wait_for_page_load(device_data, open_dropdowns=False)
+
+        reservation_indicators = self.driver.find_elements_by_class_name("gpu-reservation-indicator")
+        self.assertEqual(len(reservation_indicators), 3)
+        for reservation_indicator in reservation_indicators:
+            self.assertEqual("alloc", reservation_indicator.text)
