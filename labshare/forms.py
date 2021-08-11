@@ -1,4 +1,5 @@
 from django import forms
+from django.conf import settings
 from django.contrib.auth.models import User
 from django.forms import SelectMultiple, Select
 
@@ -16,7 +17,7 @@ class MessageForm(forms.Form):
 
 class ViewAsForm(forms.Form):
     username = forms.ModelChoiceField(
-        queryset=User.objects.all(),
+        queryset=User.objects.all().exclude(username__endswith="_user").exclude(username=settings.ALLOCATION_UPDATE_USERNAME),
         empty_label="Select a user",
         required=True,
         widget=Select(attrs={"id": "username-field"})

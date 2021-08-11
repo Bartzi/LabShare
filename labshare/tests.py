@@ -526,7 +526,7 @@ class HijackTests(WebTest):
         self.assertEqual(response.status_code, 200)
 
         body = response.body.decode('utf-8')
-        usernames = [u.username for u in User.objects.all()]
+        usernames = [u.username for u in User.objects.all().exclude(username=settings.ALLOCATION_UPDATE_USERNAME).exclude(username__endswith="_user")]
         for username in usernames:
             self.assertIn(username, body)
 
