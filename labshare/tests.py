@@ -1035,6 +1035,40 @@ class FrontendOverviewProcessListTest(FrontendTestsBase):
             self.assertIn(process['memory_usage'], memory_text)
 
 
+@skipIf("GITHUB_ACTIONS" in os.environ and os.environ["GITHUB_ACTIONS"] == "true", "Skipping this test on Github Actions.")
+class FrontendOverviewProcessListModalTest(FrontendTestsBase):
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.driver.implicitly_wait(1)
+
+    def test_process_overview_only_one_modal_opens(self):
+        device_1_data = self.build_gpus_for_device(self.device_1, 1, 1, 0)
+        device_2_data = self.build_gpus_for_device(self.device_2, 1, 2, 3)
+
+        self.wait_for_page_load([device_1_data, device_2_data])
+        self.assertRaises(NoSuchElementException, self.driver.find_element_by_id, "full-process-list")
+
+        gpu = device_2_data['gpus'][0]
+        gpu_row = self.driver.find_element_by_id(gpu['uuid'])
+        process_show_button = gpu_row.find_element_by_class_name("gpu-process-show")
+        WebDriverWait(self.driver, 2).until(
+            lambda _: EC.element_to_be_clickable(process_show_button)
+        )
+        # self.assertFalse(process_show_button.get_property("disabled"))
+        self.assertRaises(NoSuchElementException, self.driver.find_element_by_id, "full-process-list")
+        process_show_button.click()
+
+        WebDriverWait(self.driver, 2).until(
+            lambda _: EC.visibility_of_element_located((By.ID, "full-process-list")),
+            "Modal did not open!"
+        )
+
+        modal_elements = self.driver.find_elements_by_class_name("modal-backdrop")
+        self.assertEqual(len(modal_elements), 1)
+
+
 class SlurmInfoFrontendTests(FrontendTestsBase):
 
     def prepare_gpus(self):
