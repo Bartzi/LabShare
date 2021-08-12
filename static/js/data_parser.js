@@ -15,7 +15,7 @@ function createNewGPURow(gpuData, deviceName) {
     const processButton = gpuRow.find('.gpu-processes').find('.gpu-process-show');
     processButton.attr('data-device', deviceName);
     processButton.attr('data-gpu-uuid', gpuData.uuid);
-    setupModals();
+    setupModals(gpuRow);
     return gpuRow;
 }
 
@@ -97,8 +97,9 @@ function updateGPUData(data, currentUser) {
     }
 }
 
-function setupModals() {
-    $('.gpu-process-show').on('click', function (event) {
+function setupModals(root) {
+    const processShowButton = root.find('.gpu-process-show');
+    processShowButton.on('click', function (event) {
         const that = $(this);
         const device = that.data('device');
         const uuid = that.data('gpu-uuid');
@@ -165,5 +166,4 @@ function setupWebsockets(deviceNames, currentUser) {
 
 export default function(deviceNames, currentUser) {
     setupWebsockets(deviceNames, currentUser);
-    setupModals();
 }
