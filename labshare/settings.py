@@ -23,7 +23,8 @@ AUTH_LDAP_USER_ATTR_MAP = {
     "email": "mail"
 }
 AUTH_LDAP_SERVER_URI = "ldaps://example.com"
-AUTH_LDAP_USER_SEARCH = LDAPSearch("ou=People,dc=example,dc=com", ldap.SCOPE_SUBTREE, "(uid=%(user)s)")
+AUTH_LDAP_USER_DN = "ou=People,dc=example,dc=com"
+AUTH_LDAP_USER_SEARCH = LDAPSearch(AUTH_LDAP_USER_DN, ldap.SCOPE_SUBTREE, "(uid=%(user)s)")
 
 AUTH_LDAP_GROUP_SEARCH = LDAPSearch(
     "ou=Group,dc=example,dc=com", ldap.SCOPE_SUBTREE, "(objectClass=groupOfNames)"
