@@ -1,5 +1,6 @@
 import random
 import string
+from contextlib import contextmanager
 from unittest import mock
 
 from django.contrib.auth.models import User
@@ -68,11 +69,8 @@ class SyncUsersTests(TestCase):
         for user_dn in search_mock.user_dns:
             self.assertIn(user_dn, imported_usernames)
 
-    def test_sync_users_new_users_in_ldap(self):
-        num_users_before_update = User.objects.count()
-        num_users_to_add = 3
-        search_mock = LDAPSearchMock(num_users_to_add)
-
+    @contextmanager
+    def patch_ldap_functions(self, search_mock):
         with mock.patch('django_auth_ldap.backend.LDAPSearch.execute') as mocked_execute, \
              mock.patch('django_auth_ldap.backend.LDAPSearch.__init__') as mocked_init, \
              mock.patch('django_auth_ldap.backend._LDAPUser._bind_as') as mocked_bind:
@@ -80,6 +78,14 @@ class SyncUsersTests(TestCase):
             mocked_execute.side_effect = search_mock.execute
             mocked_bind.return_value = None
 
+            yield
+
+    def test_sync_users_new_users_in_ldap(self):
+        num_users_before_update = User.objects.count()
+        num_users_to_add = 3
+        search_mock = LDAPSearchMock(num_users_to_add)
+
+        with self.patch_ldap_functions(search_mock):
             management.call_command('sync_users')
 
         self.assertEqual(User.objects.count(), num_users_before_update + num_users_to_add)
@@ -90,13 +96,7 @@ class SyncUsersTests(TestCase):
         num_users_to_add = 3
         search_mock = LDAPSearchMock(num_users_to_add)
 
-        with mock.patch('django_auth_ldap.backend.LDAPSearch.execute') as mocked_execute, \
-             mock.patch('django_auth_ldap.backend.LDAPSearch.__init__') as mocked_init, \
-             mock.patch('django_auth_ldap.backend._LDAPUser._bind_as') as mocked_bind:
-            mocked_init.side_effect = search_mock.init
-            mocked_execute.side_effect = search_mock.execute
-            mocked_bind.return_value = None
-
+        with self.patch_ldap_functions(search_mock):
             management.call_command('sync_users')
 
             search_mock.user_data.pop()
@@ -112,13 +112,7 @@ class SyncUsersTests(TestCase):
         num_users_to_add = 3
         search_mock = LDAPSearchMock(num_users_to_add)
 
-        with mock.patch('django_auth_ldap.backend.LDAPSearch.execute') as mocked_execute, \
-             mock.patch('django_auth_ldap.backend.LDAPSearch.__init__') as mocked_init, \
-             mock.patch('django_auth_ldap.backend._LDAPUser._bind_as') as mocked_bind:
-            mocked_init.side_effect = search_mock.init
-            mocked_execute.side_effect = search_mock.execute
-            mocked_bind.return_value = None
-
+        with self.patch_ldap_functions(search_mock):
             management.call_command('sync_users')
 
             search_mock.user_data.pop()
@@ -126,7 +120,7 @@ class SyncUsersTests(TestCase):
 
             new_user = get_ldap_users(1)
             search_mock.user_data.extend(new_user)
-            search_mock.user_dns.append(new_user[0][0])
+            search_mock.fill_user_dns()
 
             management.call_command('sync_users')
 
