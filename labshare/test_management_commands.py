@@ -11,7 +11,7 @@ from model_bakery import baker
 from labshare.tests import device_recipe
 
 
-def get_ldap_users(num_users: int) -> list:
+def get_ldap_users(num_users: int, without_mail: bool = False) -> list:
     ldap_data = []
     for user_id in range(num_users):
         user_name = ''.join([random.choice(string.ascii_letters) for _ in range(random.randint(5, 20))])
@@ -26,15 +26,23 @@ def get_ldap_users(num_users: int) -> list:
                 "cn": [user_name]
             }
         )
+        if without_mail:
+            # we do not want an email address for this user
+            del user_data[1]['mail']
+
         ldap_data.append(user_data)
     return ldap_data
 
 
 class LDAPSearchMock:
 
-    def __init__(self, num_users):
+    def __init__(self, num_users: int, num_users_without_mail: int = 0):
         self.user_data = get_ldap_users(num_users)
-        self.user_dns = [dn for dn, _ in self.user_data]
+        self.user_data.extend(get_ldap_users(num_users_without_mail, without_mail=True))
+        self.fill_user_dns()
+
+    def fill_user_dns(self):
+        self.user_dns = [dn for dn, user_data in self.user_data if 'mail' in user_data]
 
     def init(self, base_dn, *args, **kwargs):
         self.base_dn = base_dn
@@ -91,6 +99,18 @@ class SyncUsersTests(TestCase):
         self.assertEqual(User.objects.count(), num_users_before_update + num_users_to_add)
         self.check_that_correct_users_are_in_database(search_mock)
 
+    def test_sync_users_new_users_in_ldap_including_users_without_mail(self):
+        num_users_before_update = User.objects.count()
+        num_users_to_add = 3
+        num_users_without_mail = 2
+        search_mock = LDAPSearchMock(num_users_to_add, num_users_without_mail)
+
+        with self.patch_ldap_functions(search_mock):
+            management.call_command('sync_users')
+
+        self.assertEqual(User.objects.count(), num_users_before_update + num_users_to_add)
+        self.check_that_correct_users_are_in_database(search_mock)
+
     def test_sync_users_remove_users_from_ldap(self):
         num_users_before_update = User.objects.count()
         num_users_to_add = 3
@@ -127,4 +147,45 @@ class SyncUsersTests(TestCase):
         self.assertEqual(User.objects.count(), num_users_before_update + num_users_to_add)
         self.check_that_correct_users_are_in_database(search_mock)
 
+    def test_sync_users_add_and_remove_already_existing_users(self):
+        baker.make(User, email="testemail@test.de")
 
+        num_users_before_update = User.objects.count()
+        num_users_to_add = 3
+        search_mock = LDAPSearchMock(num_users_to_add)
+
+        with self.patch_ldap_functions(search_mock):
+            management.call_command('sync_users')
+
+        self.assertEqual(User.objects.count(), num_users_before_update - 1 + num_users_to_add)
+        self.check_that_correct_users_are_in_database(search_mock)
+
+    def test_sync_users_add_and_do_remove_already_existing_super_users(self):
+        baker.make(User, email="testemail@test.de", is_superuser=True)
+
+        num_users_before_update = User.objects.count()
+        num_users_to_add = 3
+        search_mock = LDAPSearchMock(num_users_to_add)
+
+        with self.patch_ldap_functions(search_mock):
+            management.call_command('sync_users')
+
+        self.assertEqual(User.objects.count(), num_users_before_update + num_users_to_add)
+        self.check_that_correct_users_are_in_database(search_mock)
+
+    def test_sync_users_no_changes_in_ldap(self):
+        num_users_before_update = User.objects.count()
+        num_users_to_add = 3
+        search_mock = LDAPSearchMock(num_users_to_add)
+
+        with self.patch_ldap_functions(search_mock):
+            management.call_command('sync_users')
+
+        self.assertEqual(User.objects.count(), num_users_before_update + num_users_to_add)
+        self.check_that_correct_users_are_in_database(search_mock)
+
+        with self.patch_ldap_functions(search_mock):
+            management.call_command('sync_users')
+
+        self.assertEqual(User.objects.count(), num_users_before_update + num_users_to_add)
+        self.check_that_correct_users_are_in_database(search_mock)
